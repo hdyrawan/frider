@@ -60,32 +60,45 @@ frider --rules /path/to/rules.json app.apk
 
 ```bash
 # classify specific installed packages (pulls via `pm path`, needs adb + device)
-frider --adb <serial> com.example.app com.example.other
-
-# every third-party package on the device
-frider --adb <serial> --all
+frider --adb --serial <serial> com.example.app com.example.other
 
 # serial from the environment
 export ANDROID_PROBE_SERIAL=<serial>
 frider --adb com.example.app
+
+# every third-party package on the device
+frider --adb --all
 ```
 
-Pulled APKs are cached under `--cache-dir` (default: a temp dir) so a second run
-over the same packages does not re-pull.
+Pulled APKs are cached under `~/.cache/frider/` (or `$XDG_CACHE_HOME/frider`),
+so a second run over the same packages does not re-pull. Pass `--cache-dir DIR`
+to point elsewhere or `--no-cache` for a throwaway pull.
 
 ### Example output
 
 ```
-+----------------------+--------------------------+------------+-----------------------------+-------------------------------+
-| source               | verdict                  | confidence | markers                     | notes                         |
-+----------------------+--------------------------+------------+-----------------------------+-------------------------------+
-| app.apk              | Flutter / Dart           | High       | flutter:libflutter.so,...   |                               |
-| rn.apk               | React Native (hermes)    | High       | react-native:libhermes.so   | engine=hermes                 |
-| rn-jsc.apk           | React Native (jsc)       | High       | react-native:libjsc.so      | engine=jsc                    |
-| web.apk              | Apache Cordova           | High       | cordova:assets/www/index... |                               |
-| kony.apk             | Kony (Temenos)           | Medium     | kony:libkonyjsvm.so         | libs=RootBeer (root checker)  |
-+----------------------+--------------------------+------------+-----------------------------+-------------------------------+
++----------------------+--------------------------+------------+---------------------------------------------+-------------------------------+
+| source               | verdict                  | confidence | markers                                     | notes                         |
++----------------------+--------------------------+------------+---------------------------------------------+-------------------------------+
+| app.apk              | Flutter / Dart           | High       | flutter:lib/arm64-v8a/libflutter.so (+7)     |                               |
+| rn.apk               | React Native (hermes)    | High       | react-native:lib/arm64-v8a/libhermes.so      | engine=hermes                 |
+| rn-jsc.apk           | React Native (jsc)       | High       | react-native:lib/arm64-v8a/libjsc.so (+1)    | engine=jsc                    |
+| web.apk              | Apache Cordova           | High       | cordova:assets/www/index.html (+2)           |                               |
+| kony.apk             | Kony (Temenos)           | Medium     | kony:lib/arm64-v8a/libkonyjsvm.so            | libs=RootBeer (root checker)  |
++----------------------+--------------------------+------------+---------------------------------------------+-------------------------------+
+2 source(s): 1 flutter / dart, 1 react native
 ```
+
+The **markers** column shows the actual APK entries that matched (up to 8 per
+framework, with a `(+N)` overflow count) — not the rule regexes. Colors are
+enabled automatically when stdout is a TTY; disable with `--no-color` or the
+`NO_COLOR` env var. A one-line tally follows the table.
+
+### Exit codes
+
+`0` — everything classified · `1` — at least one source errored (missing file,
+unreadable APK, adb pull failure, package not installed) · `2` — usage error
+(e.g. `--adb` without a serial and no `ANDROID_PROBE_SERIAL`).
 
 ## Rules format
 
@@ -114,13 +127,13 @@ over the same packages does not re-pull.
 Markers are regular expressions matched (case-insensitive) against every APK
 entry path; the innermost path is used, so `container.xapk!app.apk!lib/...`
 matches the same rules as a flat APK. A framework wins by marker presence;
-ties break on `weight`, then on the number of distinct markers matched. An app
+ties break on `weight`, then on the number of distinct entries matched. An app
 with both Flutter and React Native markers is reported as hybrid.
 
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q     # 9 fixture-based tests
+python3 -m pytest tests/ -q     # 17 fixture-based tests
 ```
 
 ## Roadmap

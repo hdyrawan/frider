@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 class AdbError(RuntimeError):
@@ -29,19 +29,22 @@ def apk_paths(serial: str, pkg: str) -> List[str]:
     return paths
 
 
-def pull_package(serial: str, pkg: str, out_dir: str) -> Optional[str]:
-    """Pull all APKs of a package into ``out_dir/<pkg>/``; return that dir, or
-    None if the package is not installed. The returned dir works with
-    ``frider.apk.entries_for``."""
+def pull_package(serial: str, pkg: str, out_dir: str) -> Optional[Tuple[str, int]]:
+    """Pull all APKs of a package into ``out_dir/<pkg>/``; return
+    ``(dir, apk_count)``, or None if the package is not installed. The returned
+    dir works with ``frider.apk.entries_for``. Any failed pull raises
+    ``AdbError`` so a broken half-pulled set is never classified as "native"."""
     paths = apk_paths(serial, pkg)
     if not paths:
         return None
     d = os.path.join(out_dir, pkg)
     os.makedirs(d, exist_ok=True)
     for i, apk in enumerate(paths):
-        subprocess.run(
+        r = subprocess.run(
             ["adb", "-s", serial, "pull", apk, os.path.join(d, f"apk_{i}.apk")],
             capture_output=True,
             text=True,
         )
-    return d
+        if r.returncode != 0:
+            raise AdbError(f"adb pull failed for {pkg}: {apk}\n{r.stderr.strip()}")
+    return d, len(paths)

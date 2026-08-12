@@ -7,6 +7,7 @@ import pytest
 
 from frider.apk import entries_for, innermost
 from frider.rules import classify_entries, load_rules
+from frider.cli import build_parser
 
 RULES = load_rules()
 
@@ -148,6 +149,32 @@ def test_xapk_container_sees_inner_apk(xapk_container):
     assert r.verdict == "Flutter / Dart"
 
 
+def test_markers_record_real_matched_paths(flutter_apk):
+    """Regression: markers must name the actual entries, not the rule regexes."""
+    r = classify(str(flutter_apk))
+    paths = r.markers["flutter"]
+    assert "lib/arm64-v8a/libflutter.so" in paths
+    assert "assets/flutter_assets/AssetManifest.json" in paths
+    assert not any(p.startswith("lib/[^/]") for p in paths)
+
+
+def test_reader_works_after_entries_returned(flutter_apk):
+    """Regression: file-backed readers reopen the zip, so calling read()
+    after entries_for() returns must not hit a closed handle."""
+    entries = entries_for(str(flutter_apk))
+    target = next(e for e in entries if e.path.endswith("libflutter.so"))
+    assert target.read is not None
+    assert target.read() == b"engine"
+
+
+def test_xapk_nested_reader_works(xapk_container):
+    """Regression: nested (BytesIO-backed) entries read fine too."""
+    entries = entries_for(str(xapk_container))
+    target = next(e for e in entries if e.path.endswith("libflutter.so"))
+    assert target.read is not None
+    assert target.read() == b"engine"
+
+
 def test_innermost_path_helper():
     assert innermost("app.apk!lib/arm64-v8a/libflutter.so") == "lib/arm64-v8a/libflutter.so"
     assert innermost("lib/arm64-v8a/libflutter.so") == "lib/arm64-v8a/libflutter.so"
@@ -159,3 +186,50 @@ def test_directory_mode(tmp_path):
     results = [classify(str(tmp_path / n)) for n in ("a.apk", "b.apk")]
     assert results[0].verdict == "Flutter / Dart"
     assert results[1].verdict == "Native (no framework markers)"
+
+
+def test_directory_mode_reads_splits_as_one_set(tmp_path):
+    """A dir of pulled split APKs is one classification (union of entries)."""
+    make_apk(tmp_path / "apk_0.apk", {"classes.dex": b"d", "AndroidManifest.xml": b"<m/>"})
+    make_apk(tmp_path / "apk_1.apk", {"lib/arm64-v8a/libflutter.so": b"e"})
+    r = classify(str(tmp_path))
+    assert r.verdict == "Flutter / Dart"
+
+
+# ---- CLI parsing (regression for the --adb ambiguity) ----
+
+def test_parser_adb_flag_separates_serial_from_packages():
+    args = build_parser().parse_args(["--adb", "--serial", "X", "com.a", "com.b"])
+    assert args.adb is True
+    assert args.serial == "X"
+    assert args.paths == ["com.a", "com.b"]
+
+
+def test_parser_adb_flag_without_serial_keeps_positionals_as_packages():
+    """Regression: `frider --adb com.example.app` must treat the positional as
+    a PACKAGE, not as the serial (the old optional-value --adb ate it)."""
+    args = build_parser().parse_args(["--adb", "com.example.app"])
+    assert args.adb is True
+    assert args.serial is None
+    assert args.paths == ["com.example.app"]
+
+
+def test_parser_plain_paths_are_not_adb_mode():
+    args = build_parser().parse_args(["app.apk", "dir/"])
+    assert args.adb is False
+    assert args.paths == ["app.apk", "dir/"]
+
+
+def test_module_entry_exit_codes_propagate(flutter_apk, tmp_path):
+    """Regression: `python3 -m frider` must exit non-zero on errors, not 0."""
+    import subprocess
+    import sys
+
+    ok = subprocess.run([sys.executable, "-m", "frider", str(flutter_apk), "--no-color"],
+                        capture_output=True, text=True)
+    assert ok.returncode == 0
+
+    bad = subprocess.run([sys.executable, "-m", "frider", str(tmp_path / "missing.apk"), "--no-color"],
+                         capture_output=True, text=True)
+    assert bad.returncode == 1
+    assert "ERROR" in bad.stdout

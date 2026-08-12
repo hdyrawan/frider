@@ -4,6 +4,10 @@ Entries are plain names + an optional reader. Nested APKs inside an XAPK/APKS
 container are surfaced with a ``<container>!<inner-path>`` prefix so the
 classifier sees the inner zip's contents. Rules match against the innermost
 path (the part after the last ``!``).
+
+Readers are safe to call any time: file-backed entries reopen the zip on each
+read instead of capturing a handle that a ``with`` block later closed, so
+entries survive their source archive being garbage-collected.
 """
 
 from __future__ import annotations
@@ -22,35 +26,42 @@ class Entry:
     read: Optional[Callable[[], bytes]]
 
 
-def _zip_entries(zf: zipfile.ZipFile, prefix: str = "") -> List[Entry]:
-    out: List[Entry] = []
-    for info in zf.infolist():
-        name = info.filename
-        display = f"{prefix}!{name}" if prefix else name
-        if name.endswith("/"):
-            out.append(Entry(display, True, None))
-        else:
-            out.append(Entry(display, False, _make_reader(zf, name)))
-    return out
+def _make_file_reader(path: str, name: str) -> Callable[[], bytes]:
+    """Read ``name`` from ``path`` by reopening the zip — safe after close."""
+
+    def read() -> bytes:
+        with zipfile.ZipFile(path) as zf:
+            return zf.read(name)
+
+    return read
 
 
-def _make_reader(zf: zipfile.ZipFile, name: str) -> Callable[[], bytes]:
+def _make_buffer_reader(zf: zipfile.ZipFile, name: str) -> Callable[[], bytes]:
+    """Read from an in-memory zip that the caller keeps referenced."""
+
     def read() -> bytes:
         return zf.read(name)
 
     return read
 
 
-def _make_file_reader(data: bytes) -> Callable[[], bytes]:
-    def read() -> bytes:
-        return data
-
-    return read
+def _zip_entries(zf: zipfile.ZipFile, reopen_path: Optional[str], prefix: str = "") -> List[Entry]:
+    out: List[Entry] = []
+    for info in zf.infolist():
+        name = info.filename
+        display = f"{prefix}!{name}" if prefix else name
+        if name.endswith("/"):
+            out.append(Entry(display, True, None))
+        elif reopen_path is not None:
+            out.append(Entry(display, False, _make_file_reader(reopen_path, name)))
+        else:
+            out.append(Entry(display, False, _make_buffer_reader(zf, name)))
+    return out
 
 
 def entries_for(path: str) -> List[Entry]:
     """Return all entries for an APK file, an XAPK/APKS container, or a
-    directory of APKs (each file becomes a ``<filename>!<path>`` entry).
+    directory of APKs (each APK inside becomes a ``<filename>!<path>`` entry).
     """
     if os.path.isdir(path):
         out: List[Entry] = []
@@ -65,14 +76,14 @@ def entries_for(path: str) -> List[Entry]:
                 else:
                     with open(fp, "rb") as fh:
                         data = fh.read()
-                    out.append(Entry(rel, False, _make_file_reader(data)))
+                    out.append(Entry(rel, False, _make_bytes_reader(data)))
         return out
 
     if not zipfile.is_zipfile(path):
         raise ValueError(f"not a zip/apk: {path}")
 
     with zipfile.ZipFile(path) as zf:
-        out = _zip_entries(zf)
+        out = _zip_entries(zf, reopen_path=path)
         # Surface nested APKs (XAPK/APKS containers hold .apk members).
         for e in list(out):
             inner = e.path.split("!")[-1]
@@ -81,10 +92,17 @@ def entries_for(path: str) -> List[Entry]:
                     assert e.read is not None
                     data = e.read()
                     nzf = zipfile.ZipFile(io.BytesIO(data))
-                    out.extend(_zip_entries(nzf, prefix=e.path))
-                except zipfile.BadZipFile:
+                    out.extend(_zip_entries(nzf, reopen_path=None, prefix=e.path))
+                except (zipfile.BadZipFile, OSError):
                     pass
         return out
+
+
+def _make_bytes_reader(data: bytes) -> Callable[[], bytes]:
+    def read() -> bytes:
+        return data
+
+    return read
 
 
 def innermost(path: str) -> str:
