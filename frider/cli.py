@@ -16,6 +16,7 @@ import argparse
 import os
 import sys
 import tempfile
+import zipfile
 from typing import List, Optional
 
 from . import __version__
@@ -131,7 +132,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         for path in args.paths:
             try:
                 results.append(_classify_path(path, rules))
-            except (ValueError, OSError) as e:
+            except (ValueError, OSError, zipfile.BadZipFile) as e:
                 results.append(_error_result(path, str(e)))
 
     if args.json:

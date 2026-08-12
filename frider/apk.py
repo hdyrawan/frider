@@ -82,20 +82,25 @@ def entries_for(path: str) -> List[Entry]:
     if not zipfile.is_zipfile(path):
         raise ValueError(f"not a zip/apk: {path}")
 
-    with zipfile.ZipFile(path) as zf:
-        out = _zip_entries(zf, reopen_path=path)
-        # Surface nested APKs (XAPK/APKS containers hold .apk members).
-        for e in list(out):
-            inner = e.path.split("!")[-1]
-            if not e.is_dir and inner.lower().endswith((".apk", ".xapk", ".apks")):
-                try:
-                    assert e.read is not None
-                    data = e.read()
-                    nzf = zipfile.ZipFile(io.BytesIO(data))
-                    out.extend(_zip_entries(nzf, reopen_path=None, prefix=e.path))
-                except (zipfile.BadZipFile, OSError):
-                    pass
-        return out
+    try:
+        with zipfile.ZipFile(path) as zf:
+            out = _zip_entries(zf, reopen_path=path)
+            # Surface nested APKs (XAPK/APKS containers hold .apk members).
+            for e in list(out):
+                inner = e.path.split("!")[-1]
+                if not e.is_dir and inner.lower().endswith((".apk", ".xapk", ".apks")):
+                    try:
+                        assert e.read is not None
+                        data = e.read()
+                        nzf = zipfile.ZipFile(io.BytesIO(data))
+                        out.extend(_zip_entries(nzf, reopen_path=None, prefix=e.path))
+                    except (zipfile.BadZipFile, OSError):
+                        pass
+            return out
+    except zipfile.BadZipFile as e:
+        # A file with zip magic but a broken central directory (truncated
+        # download, bad split) must surface as a clean error, not a traceback.
+        raise ValueError(f"corrupt zip: {path} ({e})") from e
 
 
 def _make_bytes_reader(data: bytes) -> Callable[[], bytes]:

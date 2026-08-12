@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import List, Optional
+from typing import Optional
 
 _NO_COLOR_ENV = os.environ.get("NO_COLOR") is not None
 

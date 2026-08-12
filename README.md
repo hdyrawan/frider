@@ -194,7 +194,7 @@ with both Flutter and React Native markers is reported as hybrid.
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q     # 17 fixture-based tests
+python3 -m pytest tests/ -q     # 18 fixture-based tests
 ```
 
 ## Roadmap

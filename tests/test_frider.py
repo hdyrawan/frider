@@ -233,3 +233,27 @@ def test_module_entry_exit_codes_propagate(flutter_apk, tmp_path):
                          capture_output=True, text=True)
     assert bad.returncode == 1
     assert "ERROR" in bad.stdout
+
+
+def test_corrupt_zip_is_clean_error(tmp_path):
+    """Regression: a file with zip magic but a broken central directory must
+    produce an ERROR row (exit 1), never a traceback."""
+    import struct
+    import subprocess
+    import sys
+    import zipfile as zf_mod
+
+    local = b"PK\x03\x04" + struct.pack("<HHHHH", 20, 0, 0, 0, 0) + b"a.txt" + b"\x00" * 16 + b"hello"
+    eocd = b"PK\x05\x06" + struct.pack("<HHHHIIH", 0, 0, 1, 1, 64, 40, 0)
+    corrupt = tmp_path / "corrupt.apk"
+    corrupt.write_bytes(local + b"\x90" * 64 + eocd)
+    assert zf_mod.is_zipfile(str(corrupt))  # passes the magic check...
+    with pytest.raises(zf_mod.BadZipFile):
+        zf_mod.ZipFile(str(corrupt)).infolist()  # ...but breaks on open
+
+    r = subprocess.run([sys.executable, "-m", "frider", str(corrupt), "--no-color"],
+                       capture_output=True, text=True)
+    assert r.returncode == 1
+    assert "ERROR" in r.stdout
+    assert "corrupt zip" in r.stdout
+    assert "Traceback" not in r.stderr
