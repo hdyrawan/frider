@@ -1,0 +1,104 @@
+{
+  "kotlin": {
+    "marker": "META-INF/.*\\.kotlin_module"
+  },
+  "frameworks": [
+    {
+      "id": "flutter",
+      "name": "Flutter / Dart",
+      "weight": 100,
+      "markers": [
+        "lib/[^/]+/libflutter\\.so",
+        "assets/flutter_assets/",
+        "lib/[^/]+/libapp\\.so"
+      ]
+    },
+    {
+      "id": "react-native",
+      "name": "React Native",
+      "weight": 100,
+      "markers": [
+        "assets/index\\.android\\.bundle",
+        "lib/[^/]+/libreactnative[^/]*\\.so",
+        "lib/[^/]+/libhermes[^/]*\\.so",
+        "lib/[^/]+/libjsc\\.so",
+        "lib/[^/]+/libjsi\\.so",
+        "lib/[^/]+/libfbjni\\.so"
+      ],
+      "engines": {
+        "hermes": "lib/[^/]+/libhermes[^/]*\\.so",
+        "jsc": "lib/[^/]+/libjsc\\.so|lib/[^/]+/libjscexecutor\\.so"
+      }
+    },
+    {
+      "id": "cordova",
+      "name": "Apache Cordova",
+      "weight": 80,
+      "markers": [
+        "assets/www/index\\.html",
+        "assets/www/cordova\\.js",
+        "res/xml/config\\.xml",
+        "lib/[^/]+/libcordova[^/]*\\.so"
+      ]
+    },
+    {
+      "id": "capacitor",
+      "name": "Capacitor",
+      "weight": 80,
+      "markers": [
+        "capacitor\\.config\\.(json|ts)",
+        "assets/public/"
+      ]
+    },
+    {
+      "id": "ionic",
+      "name": "Ionic (web overlay)",
+      "weight": 40,
+      "markers": [
+        "assets/www/[^/]*/ionic[^/]*\\.(js|css)",
+        "assets/www/[^/]*/ngsw\\.json"
+      ]
+    },
+    {
+      "id": "kony",
+      "name": "Kony (Temenos)",
+      "weight": 90,
+      "markers": [
+        "lib/[^/]+/libkony[^/]*\\.so"
+      ]
+    },
+    {
+      "id": "xamarin",
+      "name": "Xamarin / .NET",
+      "weight": 100,
+      "markers": [
+        "lib/[^/]+/libmonodroid\\.so",
+        "lib/[^/]+/libxamarin[^/]*\\.so",
+        "assemblies/.*\\.dll"
+      ]
+    },
+    {
+      "id": "unity",
+      "name": "Unity",
+      "weight": 100,
+      "markers": [
+        "lib/[^/]+/libunity\\.so",
+        "assets/bin/Data/Managed/"
+      ]
+    }
+  ],
+  "embedded_js": [
+    { "id": "duktape", "name": "Duktape (embedded JS)", "marker": "lib/[^/]+/libduktape\\.so" },
+    { "id": "j2v8", "name": "J2V8 (embedded V8)", "marker": "lib/[^/]+/libj2v8\\.so" }
+  ],
+  "notable_libs": [
+    { "regex": "lib/[^/]+/libtoolChecker\\.so", "label": "RootBeer (root checker)" },
+    { "regex": "lib/[^/]+/libtool-checker\\.so", "label": "RootBeer (root checker)" },
+    { "regex": "lib/[^/]+/libAppGuard\\.so", "label": "AppGuard (SecIron)" },
+    { "regex": "lib/[^/]+/libRiskStub\\.so", "label": "RiskStub (SecIron)" },
+    { "regex": "lib/[^/]+/libpairipcore\\.so", "label": "PairIP (Google Play license check)" },
+    { "regex": "lib/[^/]+/libeversafe[^/]*\\.so", "label": "Everspin EverSafe" },
+    { "regex": "lib/[^/]+/libdedge\\.so", "label": "DataVisor (device risk)" },
+    { "regex": "lib/[^/]+/libvosWrapperEx\\.so", "label": "Vkey V-OS" }
+  ]
+}
