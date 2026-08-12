@@ -30,12 +30,73 @@ and apps built on Cordova or Kony look like "native" to a Flutter/RN-only scan
 
 ## Install
 
+**Requirements:** Python **3.9+** (`python3 --version` to check) and nothing else —
+frider has **zero runtime dependencies**, so installs are instant and there is no
+dependency hell. It runs on Linux, macOS and Windows.
+
+### Option 1 — pipx (recommended, isolated CLI install)
+
+[pipx](https://pipx.pypa.io/) installs the command into its own environment so it
+never touches your other Python packages:
+
 ```bash
-pip install .            # or: pipx install . / uv tool install .
+pipx install git+https://github.com/hdyrawan/frider.git
 frider --version
 ```
 
-No dependencies beyond the Python standard library. Requires Python 3.9+.
+### Option 2 — uv tool
+
+```bash
+uv tool install git+https://github.com/hdyrawan/frider.git
+frider --version
+```
+
+### Option 3 — plain pip
+
+Prefer a virtual environment so the `frider` script lands on your PATH:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install git+https://github.com/hdyrawan/frider.git
+frider --version
+```
+
+Or, from a clone of this repo:
+
+```bash
+git clone https://github.com/hdyrawan/frider.git && cd frider
+pip install .
+frider --version
+```
+
+### Option 4 — run without installing
+
+From a clone you can also run it directly, no install step at all:
+
+```bash
+git clone https://github.com/hdyrawan/frider.git && cd frider
+python3 -m frider app.apk
+```
+
+### For development
+
+```bash
+git clone https://github.com/hdyrawan/frider.git && cd frider
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .           # editable: code changes apply immediately
+python3 -m pytest tests/   # run the test suite
+```
+
+### Verify & uninstall
+
+```bash
+frider --version        # e.g. "frider 0.2.0"
+frider --help           # full usage
+pipx uninstall frider   # or: uv tool uninstall frider / pip uninstall frider
+```
+
+> adb mode (`--adb`) additionally needs the Android `adb` binary on your `PATH`
+> and a reachable device — the APK-file modes need nothing but Python.
 
 ## Usage
 
