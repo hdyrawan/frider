@@ -4,7 +4,7 @@ All notable changes to this project are documented here. This project follows
 [semantic versioning](https://semver.org/): the `--json` payload carries its own
 `schema_version`, bumped whenever a field changes meaning or disappears.
 
-## Unreleased
+## 0.3.0
 
 ### Changed — behaviour
 
