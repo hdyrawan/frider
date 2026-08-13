@@ -132,6 +132,32 @@ frider app.apk --json
 frider --rules /path/to/rules.json app.apk
 ```
 
+### Input modes
+
+**A directory is one app, not many.** Every APK inside is unioned, which is what
+makes a split install classify correctly — the manifest lives in the base APK
+and the framework libraries in the config splits:
+
+```
+$ ls pulled/
+apk_0.apk   apk_1.apk   apk_2.apk
+
+$ frider pulled/
+| pulled | Flutter / Dart | High | flutter:lib/arm64-v8a/libflutter.so (+2) |
+1 source(s): 1 flutter / dart
+```
+
+**Containers are walked into.** APKs nested in an XAPK/APKS are surfaced with a
+`container!inner` path:
+
+```
+com.example.app.apk!AndroidManifest.xml
+com.example.app.apk!lib/arm64-v8a/libflutter.so
+```
+
+Rules match the part after the last `!`, so a nested APK is fingerprinted
+exactly like a flat one.
+
 ### adb mode — classify installed packages
 
 ```bash
@@ -146,9 +172,30 @@ frider --adb com.example.app
 frider --adb --all
 ```
 
+Progress goes to stderr, the table to stdout, so `--adb ... > report.txt` keeps
+the two apart. A package that cannot be pulled becomes its own `ERROR` row — one
+failure never aborts the batch, and never silently reports as native:
+
+```
+$ frider --adb --serial emulator-5554 --all
+pulling com.bank.mobile ...
+  ok (2 apks)
+pulling com.old.legacy ...
+  not installed
+pulling com.shop.app ...
+  error: command failed: adb -s emulator-5554 pull ... Permission denied
+
+| com.bank.mobile | Flutter / Dart | High | flutter:lib/arm64-v8a/libflutter.so (+1)     |
+| com.old.legacy  | ERROR          | -    | errors=not installed                         |
+| com.shop.app    | ERROR          | -    | errors=command failed: ... Permission denied |
+3 source(s): 1 flutter / dart, 2 error(s)
+```
+
 Pulled APKs are cached under `~/.cache/frider/` (or `$XDG_CACHE_HOME/frider`),
-so a second run over the same packages does not re-pull. Pass `--cache-dir DIR`
-to point elsewhere or `--no-cache` for a throwaway pull.
+so a second run over the same packages does not re-pull. The package directory
+is cleared before each pull, so a stale split from an older version of an app
+can never be classified as part of the current one. Pass `--cache-dir DIR` to
+point elsewhere or `--no-cache` for a throwaway pull.
 
 ### Example output
 
@@ -203,6 +250,10 @@ what can be distinguished:
   `AndroidUseAssemblyStore`, which packs them into `assemblies/*.blob` — the
   names are inside the blob, so those apps report `xamarin` (accurate: they
   *are* .NET) rather than `maui`.
+- **Inside a container, `matched_files` records the innermost path.** A match
+  found in `app.apk!lib/.../libflutter.so` is reported as
+  `lib/.../libflutter.so`, so for a multi-split XAPK the result does not say
+  *which* nested APK it came from.
 - **Kotlin Multiplatform and Compose Multiplatform are not detected**, and
   deliberately have no rules. They compile to ordinary Android code with no
   distinguishing entry names; any marker specific enough to be safe would miss
@@ -244,11 +295,40 @@ verdict can be audited rather than trusted.
 `schema_version` is bumped whenever a field changes meaning or is removed, so a
 caller can refuse input it does not understand instead of misreading it.
 
+### Scripting
+
+```bash
+# every React Native app and which JS engine it ships
+frider *.apk --json |
+  jq -r '.results[] | select(.framework=="react-native") | "\(.source)\t\(.engines[0])"'
+
+# anything shipping a root checker or RASP library
+frider *.apk --json |
+  jq -r '.results[] | select(.notable_libs != []) | "\(.source)\t\(.notable_libs | join(", "))"'
+
+# fail a pipeline if any app is still on JavaScriptCore
+frider *.apk --json | jq -e '[.results[] | select(.engines[]? == "jsc")] | length == 0' > /dev/null
+
+# count the estate by framework (ERROR rows show up as `error`)
+frider *.apk --json | jq -r '.results[].framework' | sort | uniq -c | sort -rn
+
+# refuse a payload written by a future version
+frider app.apk --json | jq -e '.schema_version == 1' > /dev/null
+```
+
+Branch on `framework`, not on `verdict` — the prose wording may change between
+releases, the id will not.
+
 ### Exit codes
 
-`0` — everything classified · `1` — at least one source errored (missing file,
-unreadable APK, adb pull failure, package not installed) · `2` — usage error
-(e.g. `--adb` without a serial and no `ANDROID_PROBE_SERIAL`).
+| code | meaning |
+|---|---|
+| `0` | everything classified |
+| `1` | at least one source errored — missing file, unreadable APK, adb pull failure, package not installed |
+| `2` | usage error — bad `--rules` file, `--adb` without a serial, no arguments |
+
+Errors are rows, not exceptions: a bad input never aborts the run or produces a
+traceback, so a batch over a hundred APKs always finishes and always reports.
 
 ## Rules format
 
