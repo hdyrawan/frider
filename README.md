@@ -431,8 +431,10 @@ is right. New or changed markers stay provisional until
 [`tools/corpus_check.py`](#measuring-accuracy-against-real-apks) has run over
 real APKs.
 
-Changes are recorded in [CHANGELOG.md](CHANGELOG.md); the threat model and
-reporting process are in [SECURITY.md](SECURITY.md).
+Conventions for contributors — layout, invariants, why a green suite does not
+validate a fingerprint, and the release process — are in
+[AGENTS.md](AGENTS.md). Changes are recorded in [CHANGELOG.md](CHANGELOG.md);
+the threat model and reporting process are in [SECURITY.md](SECURITY.md).
 
 ## Roadmap
 
