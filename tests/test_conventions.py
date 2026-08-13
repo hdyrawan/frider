@@ -79,6 +79,19 @@ def test_every_action_is_pinned_to_a_commit_sha():
     assert not loose, f"actions must be pinned by 40-character SHA:\n  {loose}"
 
 
+def test_readme_tagline_matches_the_running_version():
+    """The README reproduces the startup banner, tagline and version included.
+    The release process already rewrites the README's version strings, so this
+    fails the moment one of them is missed."""
+    from frider import __version__
+    from frider.ui import TAGLINE
+
+    expected = f" {TAGLINE} · v{__version__}"
+    assert expected in README.read_text(encoding="utf-8"), (
+        f"README's banner block should show {expected!r}"
+    )
+
+
 def test_readme_documents_every_framework_id():
     """`framework` is the documented, stable id callers branch on. Adding a
     fingerprint without listing it leaves the contract's own docs wrong — which

@@ -17,10 +17,18 @@ All notable changes to this project are documented here. This project follows
 
 ### Changed
 
-- **The banner prints on every run, on stderr.** It appeared only in `--help`
-  before. stderr rather than stdout because stdout is the contract: `--json`
-  gets piped into `jq` and tables get piped into `awk`, and neither survives
-  seven lines of ASCII art in front of it.
+- **The banner prints on every run, on stderr** — the wordmark in two solid
+  colours, `F` red and `rider` blue, with a one-line description and the
+  running version under it (`Android app framework detector · v0.3.0`).
+  It appeared only in `--help` before. stderr rather than stdout because stdout
+  is the contract: `--json` gets piped into `jq` and tables get piped into
+  `awk`, and neither survives seven lines of ASCII art in front of it. The
+  version is there because the first question about a surprising verdict is
+  which build produced it.
+- **Colour is decided per stream.** `Palette` took its TTY check from stdout
+  whatever it was colouring, so a banner on stderr wrote escape codes into
+  `2> log.txt` and lost its colour whenever stdout alone was piped. It now
+  takes the stream it colours; `--no-color` and `NO_COLOR` still win.
 
 ## 0.3.0
 

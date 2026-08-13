@@ -25,7 +25,7 @@ from . import __version__
 from .apk import entries_for
 from .report import render_json, render_package_json, render_package_table, render_table
 from .rules import classify_entries, load_rules
-from .ui import BANNER, Palette, progress, summarize
+from .ui import BANNER, TAGLINE, Palette, progress, render_banner, summarize
 
 DEFAULT_ADB_SERIAL = os.environ.get("ANDROID_PROBE_SERIAL", "")
 
@@ -169,8 +169,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     # The banner goes to stderr on every run, never stdout: --json is a
     # contract a caller pipes into jq, and a table someone pipes into awk is
     # just as easily broken by seven lines of ASCII art in front of it.
-    print(BANNER.strip("\n"), file=sys.stderr)
     palette = Palette(enabled=False if args.no_color else None)
+    # Coloured for the terminal it actually writes to: stderr. Using the stdout
+    # palette here would put escape codes in `2> log.txt` and strip colour from
+    # a terminal whenever stdout happens to be piped.
+    err_palette = Palette(enabled=False if args.no_color else None, stream=sys.stderr)
+    print(render_banner(err_palette), file=sys.stderr)
+    print(err_palette.dim(f" {TAGLINE} · v{__version__}"), file=sys.stderr)
 
     # Before the rules are loaded: a listing classifies nothing, so a broken
     # --rules file is no reason to refuse to say what is installed.
