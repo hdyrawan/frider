@@ -7,6 +7,7 @@
 |  _|  | '__|| | / _` | / _ \| '__|
 | |    | |   | || (_| ||  __/| |
 \_|    |_|   |_| \__,_| \___||_|
+ Android app framework detector · v0.3.0
 ```
 
 [![tests](https://github.com/hdyrawan/frider/actions/workflows/test.yml/badge.svg)](https://github.com/hdyrawan/frider/actions/workflows/test.yml)

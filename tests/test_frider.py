@@ -727,6 +727,103 @@ def test_list_packages_builds_the_right_adb_command(fake_pm_list):
         "adb", "-s", "SERIAL", "shell", "pm", "list", "packages"]
 
 
+# The "F" of the wordmark, read off the art by eye. Written out rather than
+# sliced with BANNER_SPLIT: deriving the expectation from the constant under
+# test makes the assertion circular, and a wrong split column then passes.
+F_GLYPH = [
+    " ______",
+    "|  ___|",
+    "| |_   ",
+    "|  _|  ",
+    "| |    ",
+    "\\_|    ",
+]
+
+
+def test_banner_is_red_f_and_blue_rider():
+    """The art spells "Frider", so the wordmark takes two solid colours along
+    the letter boundary — the red must cover the F exactly, not part of an
+    adjacent glyph."""
+    from frider.ui import BANNER, Palette, render_banner
+
+    lines = render_banner(Palette(enabled=True)).split("\n")
+    assert len(lines) == 6
+    for line, plain, f_part in zip(lines, BANNER.strip("\n").split("\n"), F_GLYPH):
+        assert line == f"\x1b[31m{f_part}\x1b[0m\x1b[34m{plain[len(f_part):]}\x1b[0m"
+
+
+def test_banner_colour_is_dropped_when_asked():
+    """--no-color reaches the banner too, not just the table."""
+    from frider.ui import Palette, render_banner
+
+    assert "\x1b[" not in render_banner(Palette(enabled=False))
+
+
+def test_no_color_env_beats_a_tty(monkeypatch):
+    """https://no-color.org: NO_COLOR wins over an interactive terminal. The
+    banner is the loudest colour frider emits, and it honours it."""
+    from frider import ui
+
+    class Tty:
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(ui, "_NO_COLOR_ENV", True)
+    assert ui.Palette(stream=Tty()).enabled is False
+    assert "\x1b[" not in ui.render_banner(ui.Palette(stream=Tty()))
+    # ...and an explicit enabled=True is still an override, not a suggestion.
+    assert ui.Palette(enabled=True, stream=Tty()).enabled is True
+
+
+def test_banner_colour_follows_stderr_not_stdout():
+    """The banner writes to stderr, so stderr decides. Colouring it by stdout
+    would write escape codes into `2> log.txt`, and would drop colour from a
+    terminal whenever stdout happened to be piped."""
+    from frider.ui import Palette
+
+    class Stream:
+        def __init__(self, tty):
+            self._tty = tty
+
+        def isatty(self):
+            return self._tty
+
+    assert Palette(stream=Stream(True)).enabled is True
+    assert Palette(stream=Stream(False)).enabled is False
+
+
+def test_banner_colour_never_reaches_a_redirected_stderr(flutter_apk, tmp_path):
+    """End to end: with stderr captured to a file, the art must arrive plain."""
+    import subprocess
+    import sys
+
+    log = tmp_path / "err.log"
+    with open(log, "w") as fh:
+        subprocess.run([sys.executable, "-m", "frider", str(flutter_apk)],
+                       stdout=subprocess.DEVNULL, stderr=fh)
+    text = log.read_text()
+    assert "_ __" in text, "the banner should still be there"
+    assert "\x1b[" not in text, "a redirected stderr must not get escape codes"
+
+
+def test_tagline_names_the_tool_and_the_running_version(flutter_apk):
+    """Under the art: what this is, and which build produced the verdict —
+    the first question about a surprising result is which frider ran. On
+    stderr with the banner, so stdout stays parseable."""
+    import subprocess
+    import sys
+
+    from frider import __version__
+    from frider.ui import TAGLINE
+
+    r = subprocess.run(
+        [sys.executable, "-m", "frider", str(flutter_apk), "--no-color"],
+        capture_output=True, text=True,
+    )
+    assert f"{TAGLINE} · v{__version__}" in r.stderr
+    assert TAGLINE not in r.stdout
+
+
 def test_readme_banner_matches_the_code():
     """The README copy and frider.ui.BANNER must not drift apart."""
 

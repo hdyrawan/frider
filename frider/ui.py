@@ -18,6 +18,15 @@ BANNER = r"""
 \_|    |_|   |_| \__,_| \___||_|
 """
 
+# One line under the art, on stderr: what the tool is, and which build is
+# running. The version matters here — the first question about a surprising
+# verdict is which frider produced it.
+TAGLINE = "Android app framework detector"
+
+# The art spells "Frider", and the "F" glyph ends at column 7 on every line —
+# so the wordmark splits there into a red F and a blue "rider".
+BANNER_SPLIT = 7
+
 _NO_COLOR_ENV = os.environ.get("NO_COLOR") is not None
 
 
@@ -38,12 +47,22 @@ def display_width(text: str) -> int:
 
 
 class Palette:
-    """Minimal ANSI color wrapper. Auto-disabled when stdout is not a TTY or
-    when ``NO_COLOR`` is set; force with ``Palette(enabled=True/False)``."""
+    """Minimal ANSI color wrapper. Auto-disabled when its stream is not a TTY
+    or when ``NO_COLOR`` is set; force with ``Palette(enabled=True/False)``.
 
-    def __init__(self, enabled: Optional[bool] = None):
+    ``stream`` is the output it is colouring, and it decides: the banner goes
+    to stderr, so colouring it by stdout's TTY-ness writes escape codes into
+    ``2> log.txt`` and drops colour from a terminal whenever stdout is piped.
+    Resolved at call time, never bound at import — a default of
+    ``stream=sys.stdout`` would capture the real stdout before a test could
+    replace it.
+    """
+
+    def __init__(self, enabled: Optional[bool] = None, stream=None):
         if enabled is None:
-            enabled = not _NO_COLOR_ENV and sys.stdout.isatty()
+            stream = sys.stdout if stream is None else stream
+            enabled = (not _NO_COLOR_ENV
+                       and hasattr(stream, "isatty") and stream.isatty())
         self.enabled = enabled
 
     def _wrap(self, code: int, text: str) -> str:
@@ -71,6 +90,20 @@ class Palette:
 
     def cyan(self, text: str) -> str:
         return self._wrap(36, text)
+
+
+def render_banner(palette: Palette) -> str:
+    """The wordmark in two solid colours: the ``F`` red, ``rider`` blue.
+
+    Colour is applied per line rather than to the block, because a single
+    escape spanning newlines is reset by some terminals at the line break and
+    leaves the rest uncoloured.
+    """
+    out = []
+    for line in BANNER.strip("\n").split("\n"):
+        head, tail = line[:BANNER_SPLIT], line[BANNER_SPLIT:]
+        out.append(palette.red(head) + palette.blue(tail))
+    return "\n".join(out)
 
 
 def style_verdict(p: Palette, verdict: str) -> str:
