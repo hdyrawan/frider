@@ -38,6 +38,11 @@ Run the suite before pushing:
 python3 -m pytest tests -q
 ```
 
+Fixtures in `tests/` are synthetic zips written from the same assumptions as
+the rules, so a green suite says the matcher works, not that a fingerprint is
+correct. New or changed markers are provisional until `tools/corpus_check.py`
+has been run over real APKs — see the README for the corpus layout.
+
 Rules are data. Prefer adding a fingerprint to `rules.json` over adding Python.
 A marker must be specific enough to stand alone — paths that ordinary native
 apps also ship (generic resource paths, widely vendored `.so` files) cause

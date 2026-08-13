@@ -271,6 +271,54 @@ matches the same rules as a flat APK. A framework wins by marker presence;
 ties break on `weight`, then on the number of distinct entries matched. An app
 with both Flutter and React Native markers is reported as hybrid.
 
+## Measuring accuracy against real APKs
+
+Every fixture in `tests/` is a synthetic zip built from the same assumptions
+the rules were written from, so the suite proves the **matcher** works — not
+that the **fingerprints are right**. Only real APKs answer that, and the answer
+is a number.
+
+Label a corpus by dropping each APK into a directory named after its expected
+`framework` id:
+
+```
+corpus/
+  flutter/        com.example.a.apk  com.example.b.xapk
+  react-native/   ...
+  maui/           ...
+  native/         ...     # apps built with no cross-platform framework
+  _ignore/        ...     # skipped: staging, unlabelled, licence-bound
+```
+
+Then measure:
+
+```bash
+python3 tools/corpus_check.py corpus/
+python3 tools/corpus_check.py corpus/ --json accuracy.json --min-accuracy 95
+```
+
+```
+expected      n    ok      acc  confusions
+------------------------------------------
+flutter      12    12   100.0%  -
+native        9     8    88.9%  unityx1
+react-native  7     7   100.0%  -
+
+27/28 correct — 96.4% accuracy
+```
+
+It exits non-zero below `--min-accuracy` (default: any mismatch fails), so the
+same command works as a release gate. The suite picks it up too:
+
+```bash
+FRIDER_CORPUS=corpus/ python3 -m pytest tests/           # floor of 100%
+FRIDER_CORPUS=corpus/ FRIDER_CORPUS_MIN_ACCURACY=95 python3 -m pytest tests/
+```
+
+Without `FRIDER_CORPUS` that test skips, so CI stays green without shipping
+APKs. A mislabelled directory is rejected rather than silently scored zero, and
+an empty corpus fails rather than reporting success.
+
 ## Development
 
 ```bash
