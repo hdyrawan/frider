@@ -172,9 +172,32 @@ frider --adb com.example.app
 frider --adb --all
 ```
 
+**See what is installed before scanning it** with `--list`, which costs one adb
+call and pulls nothing — where `--all` pulls every APK on the device:
+
+```bash
+frider --adb --list           # third-party packages: exactly what --all would scan
+frider --adb --list-all       # including system packages
+frider --adb --list --json    # {"schema_version": 1, ..., "packages": [...]}
+```
+
+```
+$ frider --adb --list
++------------------------------+
+| package                      |
++------------------------------+
+| com.example.app              |
+| com.example.other            |
++------------------------------+
+2 third-party package(s)
+```
+
 Progress goes to stderr, the table to stdout, so `--adb ... > report.txt` keeps
-the two apart. A package that cannot be pulled becomes its own `ERROR` row — one
-failure never aborts the batch, and never silently reports as native:
+the two apart. The banner prints on stderr too, on every run, so `--json` stays
+pipeable into `jq` and a table stays parseable — banner or not.
+
+A package that cannot be pulled becomes its own `ERROR` row — one failure never
+aborts the batch, and never silently reports as native:
 
 ```
 $ frider --adb --serial emulator-5554 --all

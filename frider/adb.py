@@ -65,10 +65,22 @@ def apk_paths(serial: str, pkg: str) -> List[str]:
     return _packages_from(_run(["adb", "-s", serial, "shell", "pm", "path", pkg]))
 
 
+def list_packages(serial: str, include_system: bool = False) -> List[str]:
+    """Sorted package names installed on the device.
+
+    Third-party only by default — the same set ``--all`` classifies, so a
+    listing says exactly what a following scan would cover. ``include_system``
+    drops the ``-3`` filter and returns platform packages too.
+    """
+    cmd = ["adb", "-s", serial, "shell", "pm", "list", "packages"]
+    if not include_system:
+        cmd.append("-3")
+    return sorted(_packages_from(_run(cmd)))
+
+
 def list_third_party_packages(serial: str) -> List[str]:
     """Sorted third-party package names installed on the device."""
-    out = _run(["adb", "-s", serial, "shell", "pm", "list", "packages", "-3"])
-    return sorted(_packages_from(out))
+    return list_packages(serial, include_system=False)
 
 
 def pull_package(serial: str, pkg: str, out_dir: str) -> Optional[Tuple[str, int]]:
