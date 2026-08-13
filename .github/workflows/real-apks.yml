@@ -1,0 +1,37 @@
+name: real apks
+
+# Fetches real, compiled APKs from public package registries and checks that no
+# framework rule fires on them. Deliberately NOT on pull_request: it depends on
+# two external registries, so a registry hiccup must not redden an unrelated PR.
+# It is also not a required status check for the same reason.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 1 * *"   # monthly — catches a rule that drifts into a false positive
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: no framework rule fires on a real native app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Fetch real APKs
+        run: python3 tools/fetch_sample_corpus.py corpus/
+
+      - name: Measure
+        run: python3 tools/corpus_check.py corpus/ --json accuracy.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: accuracy
+          path: accuracy.json

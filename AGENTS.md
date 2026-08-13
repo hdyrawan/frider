@@ -61,6 +61,12 @@ So: **a new or changed marker is provisional until `tools/corpus_check.py` has
 run over real APKs.** Say so in the pull request rather than implying the tests
 validate it. See the README for the corpus layout.
 
+`tools/fetch_sample_corpus.py` pulls real APKs from PyPI and npm and the
+`real apks` workflow runs them monthly, which covers the false-positive
+direction: no framework rule may fire on a real native app. Everything
+reachable that way is native, so it proves nothing about a Flutter or React
+Native marker — those still need apps added by hand.
+
 ## Rules are data
 
 Prefer adding a fingerprint to `rules.json` over adding Python.

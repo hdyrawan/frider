@@ -377,6 +377,36 @@ the rules were written from, so the suite proves the **matcher** works — not
 that the **fingerprints are right**. Only real APKs answer that, and the answer
 is a number.
 
+### Start with real APKs you can fetch
+
+Several open-source Android tools ship real, compiled APKs inside their PyPI
+sdists and npm tarballs. Nobody built those to match frider's rules, so they
+make a reproducible starting corpus with no binaries committed here:
+
+```bash
+python3 tools/fetch_sample_corpus.py corpus/
+python3 tools/corpus_check.py corpus/
+```
+
+```
+expected     n    ok      acc  confusions
+----------------------------------------
+native     5     5   100.0%  -
+
+5/5 correct — 100.0% accuracy
+```
+
+Every APK reachable this way is a **native** app, so this tests the direction
+frider has historically got wrong — a real native app misreported as a
+framework, which is exactly what the `res/xml/config.xml` and `libfbjni.so`
+bugs did. It runs thousands of real entry names past every marker.
+
+It does **not** validate any framework fingerprint. Nothing fetched is built
+with Flutter, React Native, MAUI, NativeScript, Qt or Titanium, so a broken
+marker for those sails straight through. For that, add apps by hand.
+
+### Labelling your own
+
 Label a corpus by dropping each APK into a directory named after its expected
 `framework` id:
 
