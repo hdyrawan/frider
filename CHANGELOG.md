@@ -4,6 +4,24 @@ All notable changes to this project are documented here. This project follows
 [semantic versioning](https://semver.org/): the `--json` payload carries its own
 `schema_version`, bumped whenever a field changes meaning or disappears.
 
+## Unreleased
+
+### Added
+
+- **`--adb --list`** shows what is installed without pulling anything. Listing
+  is the step before a scan, and it costs one adb call where `--all` costs a
+  full pull of every APK on the device. Third-party packages by default — the
+  same set `--all` classifies, so the listing says exactly what a scan would
+  cover — with `--list-all` for system packages too. `--json` returns the usual
+  versioned envelope, carrying `packages` instead of `results`.
+
+### Changed
+
+- **The banner prints on every run, on stderr.** It appeared only in `--help`
+  before. stderr rather than stdout because stdout is the contract: `--json`
+  gets piped into `jq` and tables get piped into `awk`, and neither survives
+  seven lines of ASCII art in front of it.
+
 ## 0.3.0
 
 ### Changed — behaviour

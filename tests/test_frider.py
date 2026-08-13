@@ -1,6 +1,7 @@
 """frider tests — build tiny fixture APK zips in tmp and assert classifications."""
 
 import io
+import json
 import os
 import pathlib
 import re
@@ -8,8 +9,9 @@ import zipfile
 
 import pytest
 
+from frider import cli
 from frider.apk import entries_for, innermost
-from frider.cli import build_parser
+from frider.cli import build_parser, main
 from frider.rules import classify_entries, load_rules
 
 RULES = load_rules()
@@ -593,8 +595,10 @@ def test_help_renders_the_banner_unreflowed():
         assert line in r.stdout, f"banner line lost or reflowed: {line!r}"
 
 
-def test_banner_stays_out_of_normal_and_json_output(flutter_apk):
-    """The banner belongs in --help, never in output that gets piped."""
+def test_banner_prints_on_stderr_and_never_on_stdout(flutter_apk):
+    """The banner shows on every run, on stderr. stdout is the contract: a
+    caller pipes --json into jq and a table into awk, and seven lines of ASCII
+    art in front of either one breaks it."""
     import subprocess
     import sys
 
@@ -606,6 +610,121 @@ def test_banner_stays_out_of_normal_and_json_output(flutter_apk):
         assert r.returncode == 0
         assert "\\_|" not in r.stdout
         assert "_ __" not in r.stdout
+        assert "\\_|" in r.stderr, "the banner should print on stderr"
+    # ...and stdout is still valid JSON, banner or not.
+    r = subprocess.run(
+        [sys.executable, "-m", "frider", str(flutter_apk), "--json"],
+        capture_output=True, text=True,
+    )
+    assert json.loads(r.stdout)["results"][0]["framework"] == "flutter"
+
+
+# ---- --adb --list ----
+
+@pytest.fixture
+def fake_pm_list(monkeypatch):
+    """Stub `pm list packages`, recording whether -3 was passed."""
+    import subprocess as sp
+
+    state = {"third_party": ["com.b.app", "com.a.app"],
+             "system": ["android", "com.android.systemui"],
+             "calls": []}
+
+    def fake_run(cmd, **kw):
+        state["calls"].append(cmd)
+        names = list(state["third_party"])
+        if "-3" not in cmd:
+            names += state["system"]
+        return sp.CompletedProcess(cmd, 0, "".join(f"package:{n}\r\n" for n in names), "")
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    return state
+
+
+def test_list_shows_third_party_packages_without_pulling(fake_pm_list, capsys):
+    """Listing is the step before a scan: one adb call, no APK pulled. A pull
+    here would cost gigabytes for a question the package list already answers."""
+    assert main(["--adb", "--serial", "S", "--list", "--no-color"]) == 0
+    out = capsys.readouterr().out
+    assert "| package" in out
+    assert "| com.a.app" in out
+    assert "2 third-party package(s)" in out
+    assert not any("pull" in c for c in fake_pm_list["calls"]), "--list must not pull"
+    assert all("-3" in c for c in fake_pm_list["calls"])
+
+
+def test_list_sorts_packages(fake_pm_list, capsys):
+    """Device order is arbitrary; a listing you scan by eye must not be."""
+    main(["--adb", "--serial", "S", "--list", "--no-color"])
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("| com.")]
+    assert lines == sorted(lines)
+
+
+def test_list_all_includes_system_packages(fake_pm_list, capsys):
+    """--list-all drops the -3 filter; without that it would silently return
+    the same third-party set and look like the device had no system apps."""
+    assert main(["--adb", "--serial", "S", "--list-all", "--no-color"]) == 0
+    out = capsys.readouterr().out
+    assert "| com.android.systemui" in out
+    assert "4 package(s)" in out
+    assert all("-3" not in c for c in fake_pm_list["calls"])
+
+
+def test_list_json_uses_the_same_versioned_envelope(fake_pm_list, capsys):
+    """A caller checks schema_version one way, whatever it asked for."""
+    assert main(["--adb", "--serial", "S", "--list", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema_version"] == 1
+    assert payload["tool"] == "frider"
+    assert payload["packages"] == ["com.a.app", "com.b.app"]
+
+
+def test_list_without_adb_is_a_usage_error(capsys):
+    """--list reads a device; without --adb there is nothing to list, and
+    silently listing nothing would look like an empty device."""
+    assert main(["--list"]) == 2
+    assert "--list needs --adb" in capsys.readouterr().err
+
+
+def test_list_without_a_serial_is_a_usage_error(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "DEFAULT_ADB_SERIAL", "")
+    assert main(["--adb", "--list"]) == 2
+    assert "needs a serial" in capsys.readouterr().err
+
+
+def test_list_says_it_ignored_package_names(fake_pm_list, capsys):
+    """Same reasoning as --all: dropping them in silence would look like a
+    listing filtered to exactly the names given."""
+    main(["--adb", "--serial", "S", "--list", "com.example", "--no-color"])
+    assert "ignoring the 1 name(s) given" in capsys.readouterr().err
+
+
+def test_list_says_it_ignored_all(fake_pm_list, capsys):
+    """`--list --all` asked for a full scan and gets a listing. Saying nothing
+    would read as a scan that happened to print a package list."""
+    assert main(["--adb", "--serial", "S", "--list", "--all", "--no-color"]) == 0
+    err = capsys.readouterr().err
+    assert "ignoring --all" in err
+    assert not any("pull" in c for c in fake_pm_list["calls"])
+
+
+def test_list_does_not_need_a_rules_file(fake_pm_list, capsys):
+    """A listing classifies nothing, so a broken --rules file is no reason to
+    refuse to say what is installed."""
+    assert main(["--adb", "--serial", "S", "--list", "--rules",
+                 "/nonexistent/rules.json", "--no-color"]) == 0
+    assert "cannot load rules" not in capsys.readouterr().err
+
+
+def test_list_packages_builds_the_right_adb_command(fake_pm_list):
+    from frider.adb import list_packages
+
+    list_packages("SERIAL")
+    assert fake_pm_list["calls"][-1] == [
+        "adb", "-s", "SERIAL", "shell", "pm", "list", "packages", "-3"]
+    list_packages("SERIAL", include_system=True)
+    assert fake_pm_list["calls"][-1] == [
+        "adb", "-s", "SERIAL", "shell", "pm", "list", "packages"]
 
 
 def test_readme_banner_matches_the_code():
