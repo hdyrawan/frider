@@ -4,7 +4,11 @@
     "code": "^classes[0-9]*\\.dex$"
   },
   "kotlin": {
-    "marker": "^META-INF/.*\\.kotlin_module$"
+    "markers": [
+      "^META-INF/.*\\.kotlin_module$",
+      "^kotlin/.*\\.kotlin_builtins$",
+      "^META-INF/kotlin(x)?[-_].*\\.version$"
+    ]
   },
   "frameworks": [
     {

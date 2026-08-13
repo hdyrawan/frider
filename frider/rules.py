@@ -54,6 +54,22 @@ class Result:
     errors: List[str] = field(default_factory=list)
 
 
+def kotlin_markers(rules: Dict) -> List[str]:
+    """The Kotlin marker regexes, accepting either the legacy single ``marker``
+    string or a ``markers`` list. R8 strips ``.kotlin_module`` from minified
+    apps, so a single ``.kotlin_module`` rule silently misses most real Kotlin
+    apps — hence the list form (``.kotlin_builtins`` and the ``kotlinx *.version``
+    stamps survive minification)."""
+    k = rules.get("kotlin")
+    if not k:
+        return []
+    if "markers" in k:
+        return list(k["markers"])
+    if "marker" in k:
+        return [k["marker"]]
+    return []
+
+
 def iter_patterns(rules: Dict) -> List[str]:
     """Every regex the rule set contains, in a stable order."""
     out: List[str] = []
@@ -61,8 +77,7 @@ def iter_patterns(rules: Dict) -> List[str]:
     for fw in rules.get("frameworks", []):
         out.extend(fw.get("markers", []))
         out.extend(fw.get("engines", {}).values())
-    if rules.get("kotlin"):
-        out.append(rules["kotlin"]["marker"])
+    out.extend(kotlin_markers(rules))
     out.extend(item["marker"] for item in rules.get("embedded_js", []))
     out.extend(item["regex"] for item in rules.get("notable_libs", []))
     return out
@@ -146,7 +161,7 @@ def classify_entries(entries: List[Entry], rules: Dict) -> Result:
                 if find(pattern):
                     engines.append(ename)
 
-    kotlin = bool(rules.get("kotlin")) and bool(find(rules["kotlin"]["marker"]))
+    kotlin = any(find(m) for m in kotlin_markers(rules))
 
     embedded_js = [
         item["name"] for item in rules.get("embedded_js", []) if find(item["marker"])
