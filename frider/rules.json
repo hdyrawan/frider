@@ -85,6 +85,20 @@
       ]
     },
     {
+      "id": "lynx",
+      "name": "Lynx (ByteDance)",
+      "weight": 100,
+      "markers": [
+        "^lib/[^/]+/liblynx\\.so$",
+        "^lib/[^/]+/liblynxbase\\.so$",
+        "^assets/lynx_core\\.js$"
+      ],
+      "requires": [
+        "^lib/[^/]+/liblynx\\.so$",
+        "^lib/[^/]+/liblynxbase\\.so$"
+      ]
+    },
+    {
       "id": "maui",
       "name": ".NET MAUI",
       "weight": 110,
@@ -172,6 +186,10 @@
     {
       "regex": "^lib/[^/]+/libRiskStub\\.so$",
       "label": "RiskStub (SecIron)"
+    },
+    {
+      "regex": "^lib/[^/]+/libDexHelper[^/]*\\.so$",
+      "label": "SecNeo DexShield (dex packer)"
     },
     {
       "regex": "^lib/[^/]+/libpairipcore\\.so$",

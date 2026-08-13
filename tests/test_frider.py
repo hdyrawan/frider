@@ -140,7 +140,7 @@ def test_native_with_kotlin_and_notable_lib(native_apk):
 def test_kotlin_detected_when_r8_strips_kotlin_module(tmp_path):
     """R8 minification strips ``.kotlin_module`` but keeps ``kotlin/*.kotlin_builtins``
     and the ``kotlinx *.version`` stamps. A real Kotlin app must still read as
-    Kotlin. Regression for a real banking-app miss (2026-08-13)."""
+    Kotlin. Regression for a real minified-banking-app miss (2026-08-13)."""
     apk = make_apk(tmp_path / "r8-kotlin.apk", {
         "AndroidManifest.xml": b"<manifest/>",
         "classes.dex": b"dex",
@@ -161,6 +161,48 @@ def test_no_kotlin_stays_false(tmp_path):
     })
     r = classify(str(apk))
     assert r.kotlin is False
+
+
+def test_kotlin_legacy_single_marker_rule_still_loads(tmp_path):
+    """The rule set accepts either ``markers`` (current) or a single ``marker``
+    (what shipped before R8-stripped apps forced the list form). A custom rules
+    file written against the old shape must keep working."""
+    legacy = {"kotlin": {"marker": "^META-INF/.*\\.kotlin_module$"}, "frameworks": []}
+    apk = make_apk(tmp_path / "legacy.apk", {
+        "AndroidManifest.xml": b"<manifest/>",
+        "classes.dex": b"dex",
+        "META-INF/app_release.kotlin_module": b"k",
+    })
+    assert classify_entries(entries_for(str(apk)), legacy).kotlin is True
+
+
+def test_kotlin_rule_with_neither_key_is_a_load_error(tmp_path):
+    """A typo'd key would otherwise switch Kotlin detection off in silence, and
+    report every app as `kotlin: false` with no indication why."""
+    bad = tmp_path / "bad-rules.json"
+    bad.write_text('{"kotlin": {"markerz": ["^x$"]}, "frameworks": []}', encoding="utf-8")
+    with pytest.raises(ValueError, match="kotlin rule needs"):
+        load_rules(str(bad))
+
+
+@pytest.mark.parametrize("body,match", [
+    # A bare string reached k["markers"] and raised TypeError, which main()
+    # does not catch — so a hand-edited rules file printed a traceback.
+    ('{"kotlin": "marker"}', "must be an object"),
+    ('{"kotlin": ["^x$"]}', "must be an object"),
+    ('{"kotlin": {"marker": 5}}', "'marker' must be a string"),
+    # list("^x$") is ['^', 'x', '$']: three patterns matching nearly every
+    # entry, so every APK read as Kotlin. Worse than a crash — silently wrong.
+    ('{"kotlin": {"markers": "^x$"}}', "must be a list"),
+    ('{"kotlin": {"markers": 5}}', "must be a list"),
+])
+def test_misshapen_kotlin_rule_is_a_clean_error(tmp_path, body, match):
+    """`main()` catches OSError, ValueError and re.error and turns them into a
+    one-line message; anything else reaches the user as a traceback."""
+    bad = tmp_path / "bad-shape.json"
+    bad.write_text(body, encoding="utf-8")
+    with pytest.raises(ValueError, match=match):
+        load_rules(str(bad))
 
 
 def test_hybrid(hybrid_apk):
@@ -954,7 +996,7 @@ def test_rn_bundle_without_an_engine_is_not_react_native(tmp_path):
     executed must not claim React Native. A real RN app loads the bundle with
     libhermes/libjsc/libreactnative; a bundle with none of those is a bundled
     asset (dead copy, leftover, or payload), not a framework. Found on a real
-    Flutter app (a banking app) that shipped a vestigial RN bundle."""
+    Flutter banking app that shipped a vestigial RN bundle."""
     apk = make_apk(tmp_path / "bundle-only.apk", {
         "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
         "assets/index.android.bundle": b"not executed",
@@ -987,6 +1029,37 @@ def test_rn_bundle_plus_engine_still_detected(tmp_path):
     r = classify(str(apk))
     assert r.framework == "react-native"
     assert "hermes" in r.engines
+
+
+# ---- Lynx (ByteDance) ----
+
+def test_lynx_runtime_is_detected(tmp_path):
+    """Lynx ships its own runtime (liblynx.so / liblynxbase.so) and renders
+    ``template.js`` bundles produced by its toolchain — a cross-platform UI
+    framework in the same class as React Native, and previously reported as
+    native because no rule existed."""
+    apk = make_apk(tmp_path / "lynx.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
+        "lib/arm64-v8a/liblynx.so": b"engine",
+        "lib/arm64-v8a/liblynxbase.so": b"base",
+        "assets/lynx_core.js": b"js",
+    })
+    r = classify(str(apk))
+    assert r.framework == "lynx"
+    assert r.verdict == "Lynx (ByteDance)"
+
+
+def test_lynx_core_asset_without_the_runtime_is_not_lynx(tmp_path):
+    """``assets/lynx_core.js`` is a payload: Android loads nothing from
+    assets/, so without liblynx.so there is no engine to run it. Same rule as
+    the React Native bundle and flutter_assets cases."""
+    apk = make_apk(tmp_path / "lynx-asset-only.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
+        "assets/lynx_core.js": b"not executed",
+    })
+    r = classify(str(apk))
+    assert r.framework == "native", "lynx_core.js alone was treated as Lynx"
+    assert r.markers == {}
 
 
 # ---- Entry.match_path() carries the inner path; it is required, not derived ----
