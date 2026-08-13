@@ -9,6 +9,10 @@
 \_|    |_|   |_| \__,_| \___||_|
 ```
 
+[![tests](https://github.com/hdyrawan/frider/actions/workflows/test.yml/badge.svg)](https://github.com/hdyrawan/frider/actions/workflows/test.yml)
+[![python](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/frider/)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 Android app **fr**amework **ider** — classifies the UI framework of an Android
 app from its APK entry names: **Flutter / Dart**, **React Native** (reporting the
 **Hermes vs JavaScriptCore** engine split most detectors collapse), **Apache

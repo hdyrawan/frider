@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "frider"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Android app framework detector — classifies Flutter / Dart, React Native (Hermes vs JavaScriptCore), Apache Cordova, Capacitor, Ionic, Kony, Xamarin, Unity, or native Java/Kotlin from APK entry names. Zero runtime dependencies."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -37,6 +37,11 @@ frider = "frider.cli:main"
 
 [tool.setuptools]
 packages = ["frider"]
+
+[tool.setuptools.dynamic]
+# Single source of truth: frider --version and the built wheel can
+# no longer disagree about what version this is.
+version = { attr = "frider.__version__" }
 
 [tool.setuptools.package-data]
 frider = ["rules.json"]

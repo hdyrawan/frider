@@ -1,0 +1,53 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        include:
+          # requires-python claims Windows and macOS support, and directory
+          # mode normalises path separators — so actually exercise both.
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run the suite
+        run: python -m pytest tests -q
+
+      - name: Confirm frider still has no runtime dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade build
+          python -m build --wheel -o dist
+          if python -c "
+          import glob, sys, zipfile
+          whl = glob.glob('dist/*.whl')[0]
+          with zipfile.ZipFile(whl) as z:
+              meta = next(n for n in z.namelist() if n.endswith('METADATA'))
+              body = z.read(meta).decode()
+          sys.exit(0 if 'Requires-Dist:' in body else 1)
+          "; then
+            echo "::error::the wheel declares runtime dependencies; frider is meant to be stdlib-only"
+            exit 1
+          fi
