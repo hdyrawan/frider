@@ -264,3 +264,44 @@ def test_real_native_apks_do_not_trip_any_framework_rule(tmp_path):
     buf = io.StringIO()
     accuracy = corpus_check.report(cases, stream=buf)
     assert accuracy == 100.0, "\n" + buf.getvalue()
+
+
+def test_a_subdirectory_holding_no_apk_is_not_a_case(corpus, capsys):
+    """Regression: an APK-less directory scans as "no framework markers", so a
+    scratch folder under native/ counted as a *passing* case and inflated
+    accuracy — the empty-corpus guard's failure mode, one level down."""
+    put(corpus, "flutter", "real.apk", FLUTTER)
+    (corpus / "native" / "scratch").mkdir(parents=True)
+    (corpus / "native" / "scratch" / ".gitkeep").write_text("", encoding="utf-8")
+    (corpus / "flutter" / "notes-only").mkdir()
+    (corpus / "flutter" / "notes-only" / "TODO.txt").write_text("wip", encoding="utf-8")
+
+    assert corpus_check.main([str(corpus)]) == 0
+    captured = capsys.readouterr()
+
+    assert "1/1 correct — 100.0% accuracy" in captured.out, \
+        "phantom cases are still being counted"
+    # the native label had only a scratch folder, so it must not appear as a row
+    rows = [ln.split()[0] for ln in captured.out.splitlines()
+            if ln and not ln.startswith(("expected", "-", " "))]
+    assert "native" not in rows, f"phantom native case counted: {rows}"
+    # both skips announced, so a dropped directory is never silent
+    assert "skipping native/scratch — holds no APK" in captured.err
+    assert "skipping flutter/notes-only — holds no APK" in captured.err
+
+
+def test_a_split_set_directory_is_still_one_case(corpus, capsys):
+    """The skip must not swallow a genuine split-APK pull."""
+    split = corpus / "flutter" / "myapp-split"
+    split.mkdir(parents=True)
+    with zipfile.ZipFile(split / "base.apk", "w") as z:
+        z.writestr("AndroidManifest.xml", b"<m/>")
+        z.writestr("classes.dex", b"d")
+        z.writestr("lib/arm64-v8a/libflutter.so", b"e")
+    with zipfile.ZipFile(split / "config.en.apk", "w") as z:
+        z.writestr("AndroidManifest.xml", b"<m/>")
+        z.writestr("res/values/strings.arsc", b"x")
+
+    assert corpus_check.main([str(corpus)]) == 0
+    out = capsys.readouterr().out
+    assert "1/1 correct" in out, "a split set must score once, not per file"

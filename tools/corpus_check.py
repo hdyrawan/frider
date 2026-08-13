@@ -91,6 +91,20 @@ def collect(corpus_dir: str, labels: List[str]) -> List[str]:
     return found
 
 
+def holds_an_apk(directory: str) -> bool:
+    """Whether a subdirectory is actually a case.
+
+    A directory carrying no APK is not an app. Scanning it anyway yields "no
+    framework markers" — so under a ``native/`` label a scratch folder counts as
+    a passing case and quietly inflates accuracy, which is the very thing the
+    empty-corpus guard exists to prevent, one level down.
+    """
+    for _root, _dirs, files in os.walk(directory):
+        if any(f.lower().endswith(APK_SUFFIXES) for f in files):
+            return True
+    return False
+
+
 def classify_one(path: str, rules: Dict, expected: str) -> Case:
     try:
         # A directory of split APKs is classified as one set, matching the
@@ -112,6 +126,12 @@ def run(corpus_dir: str, rules: Dict) -> List[Case]:
             if os.path.isdir(full):
                 # A subdirectory holds one split-APK pull: one case, scanned
                 # as a set. Do not descend — the files inside belong together.
+                if not holds_an_apk(full):
+                    # Announced, never silent: a dropped directory the author
+                    # believed was a case would otherwise skew the denominator.
+                    print(f"corpus: skipping {label}/{entry} — holds no APK",
+                          file=sys.stderr)
+                    continue
                 cases.append(classify_one(full, rules, label))
             elif entry.lower().endswith(APK_SUFFIXES):
                 cases.append(classify_one(full, rules, label))
