@@ -11,7 +11,8 @@
 ```
 
 [![tests](https://github.com/hdyrawan/frider/actions/workflows/test.yml/badge.svg)](https://github.com/hdyrawan/frider/actions/workflows/test.yml)
-[![python](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/frider/)
+[![pypi](https://img.shields.io/pypi/v/frider)](https://pypi.org/project/frider/)
+[![python](https://img.shields.io/badge/python-3.9--3.14-blue)](https://pypi.org/project/frider/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Android app **fr**amework **ider** — classifies the UI framework of an Android
@@ -39,16 +40,21 @@ and apps built on Cordova or Kony look like "native" to a Flutter/RN-only scan
 
 - the framework verdict,
 - the **React Native JS engine** (`hermes` vs `jsc`),
-- Kotlin metadata presence,
+- whether the **Kotlin** runtime is packaged (see [Known limits](#known-limits)
+  for what that does and does not imply),
 - embedded JS runtimes that are *not* the framework (Duktape, J2V8),
-- notable third-party native libs (RootBeer, AppGuard, RiskStub, PairIP,
-  EverSafe, DataVisor, Vkey) as an informational side channel.
+- notable third-party native libs (RootBeer, AppGuard, RiskStub, SecNeo
+  DexShield, PairIP, EverSafe, DataVisor, Vkey) as an informational side channel.
+
+Against a device it also **lists** what is installed (`--adb --list`) without
+pulling anything, so you can see the scope of a scan before paying for it.
 
 ## Install
 
-**Requirements:** Python **3.9+** (`python3 --version` to check) and nothing else —
-frider has **zero runtime dependencies**, so installs are instant and there is no
-dependency hell. It runs on Linux, macOS and Windows.
+**Requirements:** Python **3.9–3.14** (`python3 --version` to check) and nothing
+else — frider has **zero runtime dependencies**, so installs are instant and
+there is no dependency hell. Every release is tested on 3.9 through 3.14, on
+Linux, macOS and Windows.
 
 ### Option 1 — pipx (recommended, isolated CLI install)
 
@@ -56,14 +62,14 @@ dependency hell. It runs on Linux, macOS and Windows.
 never touches your other Python packages:
 
 ```bash
-pipx install git+https://github.com/hdyrawan/frider.git
+pipx install frider
 frider --version
 ```
 
 ### Option 2 — uv tool
 
 ```bash
-uv tool install git+https://github.com/hdyrawan/frider.git
+uv tool install frider
 frider --version
 ```
 
@@ -73,11 +79,19 @@ Prefer a virtual environment so the `frider` script lands on your PATH:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install git+https://github.com/hdyrawan/frider.git
+pip install frider
 frider --version
 ```
 
-Or, from a clone of this repo:
+### Option 4 — unreleased `main`, or a clone
+
+To run ahead of the latest release, install from git:
+
+```bash
+pipx install git+https://github.com/hdyrawan/frider.git   # or uv tool / pip
+```
+
+Or from a clone of this repo:
 
 ```bash
 git clone https://github.com/hdyrawan/frider.git && cd frider
@@ -85,7 +99,7 @@ pip install .
 frider --version
 ```
 
-### Option 4 — run without installing
+### Option 5 — run without installing
 
 From a clone you can also run it directly, no install step at all:
 
@@ -128,6 +142,9 @@ frider app.xapk
 
 # machine-readable
 frider app.apk --json
+
+# what is installed on a device, without pulling anything
+frider --adb --serial <serial> --list
 
 # custom rules
 frider --rules /path/to/rules.json app.apk
@@ -234,11 +251,12 @@ point elsewhere or `--no-cache` for a throwaway pull.
 | kiosk-cordova.apk      | Apache Cordova                | High       | cordova:assets/www/index.html (+2); ionic:assets/www/build/vendor/ionic.bundle.js   |
 | field-nativescript.apk | NativeScript                  | High       | nativescript:lib/arm64-v8a/libNativeScript.so (+2)                                  |
 | teller-kony.apk        | Kony (Temenos)                | Medium     | kony:lib/arm64-v8a/libkony.so                                                       |
+| social-lynx.apk        | Lynx (ByteDance)              | High       | lynx:lib/arm64-v8a/liblynx.so (+2)                                                  |
 | plain-native.apk       | Native (no framework markers) | High       | -                                                                                   |
 | split-fragment.apk     | Native (no framework markers) | Low        | -                                                                                   |
 | truncated.apk          | ERROR                         | -          | -                                                                                   |
 +------------------------+-------------------------------+------------+-------------------------------------------------------------------------------------+
-10 source(s): 2 react native, 2 native, 1 flutter / dart, 1 .net maui, 1 apache cordova, 1 nativescript, 1 kony, 1 error(s)
+11 source(s): 2 react native, 2 native, 1 flutter / dart, 1 .net maui, 1 apache cordova, 1 nativescript, 1 kony, 1 lynx, 1 error(s)
 ```
 
 A `notes` column follows `markers` (elided above for width) carrying the JS
@@ -342,6 +360,18 @@ verdict can be audited rather than trusted.
 `schema_version` is bumped whenever a field changes meaning or is removed, so a
 caller can refuse input it does not understand instead of misreading it.
 
+`--adb --list --json` uses the same envelope and carries `packages` in place of
+`results`, so a caller checks `schema_version` one way whatever it asked for:
+
+```json
+{
+  "schema_version": 1,
+  "tool": "frider",
+  "tool_version": "0.4.0",
+  "packages": ["com.example.app", "com.example.other"]
+}
+```
+
 ### Scripting
 
 ```bash
@@ -361,6 +391,9 @@ frider *.apk --json | jq -r '.results[].framework' | sort | uniq -c | sort -rn
 
 # refuse a payload written by a future version
 frider app.apk --json | jq -e '.schema_version == 1' > /dev/null
+
+# pick from the device listing, then classify only what you picked
+frider --adb --list --json | jq -r '.packages[]' | grep bank | xargs frider --adb
 ```
 
 Branch on `framework`, not on `verdict` — the prose wording may change between
