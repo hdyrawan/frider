@@ -139,6 +139,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.all:
             from .adb import AdbError, list_third_party_packages
 
+            if args.paths:
+                # Silently dropping them would look like a scan of exactly the
+                # packages that were named.
+                progress(f"frider: --all scans every package; ignoring the "
+                         f"{len(args.paths)} name(s) given")
             try:
                 packages = list_third_party_packages(serial)
             except AdbError as e:

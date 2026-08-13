@@ -107,7 +107,11 @@ be weighted above a general one it overlaps with (`maui` above `xamarin`).
   be several GB.
 - **Report cells must stay single-line.** adb relays multi-line stderr, and a
   newline inside a cell tears the table apart. `--json` carries the full text.
-- **Pad table cells on their plain-text length**, never after adding ANSI codes.
+- **Pad table cells in terminal columns**, via `ui.display_width` — never
+  `len()` and never after adding ANSI codes. CJK app names are double-width.
+- **A package name from a device is untrusted input on a filesystem path.** It
+  becomes a cache directory that gets deleted before each pull, so validate it
+  with `adb.check_package_name` before it reaches `os.path.join`.
 - **An input that cannot be read must never report as `native`.** A wrong answer
   is worse than an error. Errored sources use `framework: "error"`.
 - **`confidence` describes the reported verdict**, not which answer was reached.

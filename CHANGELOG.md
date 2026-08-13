@@ -54,6 +54,18 @@ All notable changes to this project are documented here. This project follows
   required at construction: a caller who omits it gets a loud `TypeError`
   instead of a misclassification. `innermost()` remains for parsing display
   paths.
+- **A device-supplied package name could delete a directory outside the cache.**
+  The name became a cache subdirectory that is wiped before each pull, so a
+  device reporting `../victim` under `--adb --all` ran `rmtree` on a path outside
+  the cache, and an absolute name discarded the cache root entirely — 
+  `os.path.join("/cache", "/etc/x")` is `/etc/x`. Names are now validated against
+  the Android package-name grammar, the resolved path is checked to be inside the
+  cache root, and a bad name becomes an error row.
+- **CJK app names made the table ragged.** Column widths were counted in
+  characters, but a terminal draws East Asian text double-width. Widths and
+  padding now count terminal columns.
+- **`--adb --all` silently ignored any package names given alongside it**, which
+  looked like a scan of exactly those packages. It now says what it is doing.
 - **A path containing `!` matched markers that were not there.** The container
   boundary in a display path was parsed back out by splitting on `!`, which is
   a legal zip entry-name character — so `assets/we!rd/lib/.../libflutter.so`

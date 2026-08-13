@@ -27,7 +27,11 @@ Two things worth knowing:
   backtracking. Only use rule files you would run a script from.
 - **`--adb` writes to disk.** Pulled APKs are cached under
   `~/.cache/frider/<package>/`, and that directory is cleared before each pull.
-  Package names come from the device's package manager.
+  Package names come from the device's package manager, which makes them
+  untrusted input on a path that gets deleted — so they are validated against
+  the Android package-name grammar before use, and the resolved directory is
+  checked to be inside the cache root. A name that is not a plausible package
+  name becomes an error row rather than a directory operation.
 
 ## Supported versions
 

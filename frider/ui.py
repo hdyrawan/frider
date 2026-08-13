@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import unicodedata
 from typing import Optional
 
 # Figlet "Doom". Raw string: the art is full of backslashes that would
@@ -18,6 +19,22 @@ BANNER = r"""
 """
 
 _NO_COLOR_ENV = os.environ.get("NO_COLOR") is not None
+
+
+def display_width(text: str) -> int:
+    """Columns a terminal will actually use for ``text``.
+
+    ``len()`` is wrong for CJK app names, which are common in real APK filenames
+    and package labels: a terminal draws them double-width, so a table sized by
+    character count comes out ragged even though every row has equal ``len()``.
+    Combining marks take no column of their own.
+    """
+    width = 0
+    for ch in text:
+        if unicodedata.combining(ch):
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
 
 
 class Palette:
