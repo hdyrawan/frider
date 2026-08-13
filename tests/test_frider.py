@@ -545,3 +545,50 @@ def test_readme_banner_matches_the_code():
 
     readme = pathlib.Path(__file__).resolve().parent.parent / "README.md"
     assert BANNER.strip("\n") in readme.read_text(encoding="utf-8")
+
+
+# ---- description consistency ----
+
+DESCRIBED_ELSEWHERE = [
+    "Flutter", "React Native", "Hermes", "JavaScriptCore",
+    "Cordova", "Capacitor", "Ionic", "Kony", "Xamarin", "Unity",
+]
+
+
+def _all_descriptions():
+    """The four places frider describes itself, which used to disagree."""
+    import pathlib
+
+    import frider
+    from frider.cli import build_parser
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pyproject = root / "pyproject.toml"
+    readme = root / "README.md"
+
+    summary = re.search(r'^description = "(.*)"$',
+                        pyproject.read_text(encoding="utf-8"), re.M).group(1)
+    # README's opening paragraph, before the first '## ' heading
+    intro = readme.read_text(encoding="utf-8").split("\n## ")[0]
+
+    return {
+        "pyproject.toml": summary,
+        "frider/__init__.py": frider.__doc__,
+        "frider --help": build_parser().description,
+        "README.md": intro,
+    }
+
+
+@pytest.mark.parametrize("source", list(_all_descriptions()))
+def test_every_description_names_every_framework(source):
+    """Regression: the four descriptions drifted — --help omitted the Hermes vs
+    JavaScriptCore split entirely, which is the distinction the tool exists to
+    make, and one said 'Cordova' where the others said 'Apache Cordova'."""
+    text = _all_descriptions()[source]
+    missing = [t for t in DESCRIBED_ELSEWHERE if t.lower() not in text.lower()]
+    assert not missing, f"{source} does not mention: {', '.join(missing)}"
+
+
+def test_descriptions_agree_on_apache_cordova():
+    for source, text in _all_descriptions().items():
+        assert "Apache Cordova" in text or "Apache\nCordova" in text, source

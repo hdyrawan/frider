@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "frider"
 version = "0.2.0"
-description = "Android app framework detector — classify Flutter / React Native (Hermes vs JavaScriptCore) / Cordova / Ionic / Capacitor / Kony / Xamarin / Unity / native from APK contents. Zero dependencies."
+description = "Android app framework detector — classifies Flutter / Dart, React Native (Hermes vs JavaScriptCore), Apache Cordova, Capacitor, Ionic, Kony, Xamarin, Unity, or native Java/Kotlin from APK entry names. Zero runtime dependencies."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

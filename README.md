@@ -9,11 +9,12 @@
 \_|    |_|   |_| \__,_| \___||_|
 ```
 
-Android app **fr**amework **ider** — detect the UI framework of an Android app
-from its APK contents: **Flutter / Dart**, **React Native** (with the **Hermes vs
-JavaScriptCore** engine split most detectors miss), **Apache Cordova**, **Ionic**,
-**Capacitor**, **Kony (Temenos)**, **Xamarin / .NET**, **Unity**, or **native
-Java/Kotlin**. Zero runtime dependencies — pure Python standard library.
+Android app **fr**amework **ider** — classifies the UI framework of an Android
+app from its APK entry names: **Flutter / Dart**, **React Native** (reporting the
+**Hermes vs JavaScriptCore** engine split most detectors collapse), **Apache
+Cordova**, **Capacitor**, **Ionic**, **Kony (Temenos)**, **Xamarin / .NET**,
+**Unity**, or **native Java/Kotlin**. Zero runtime dependencies — pure Python
+standard library.
 
 Fingerprints are **data, not code**: rules live in `frider/rules.json`, so
 anyone can add a detector without touching Python.
