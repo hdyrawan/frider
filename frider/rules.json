@@ -22,8 +22,7 @@
         "lib/[^/]+/libreactnative[^/]*\\.so",
         "lib/[^/]+/libhermes[^/]*\\.so",
         "lib/[^/]+/libjsc\\.so",
-        "lib/[^/]+/libjsi\\.so",
-        "lib/[^/]+/libfbjni\\.so"
+        "lib/[^/]+/libjsi\\.so"
       ],
       "engines": {
         "hermes": "lib/[^/]+/libhermes[^/]*\\.so",
@@ -37,7 +36,7 @@
       "markers": [
         "assets/www/index\\.html",
         "assets/www/cordova\\.js",
-        "res/xml/config\\.xml",
+        "assets/www/cordova_plugins\\.js",
         "lib/[^/]+/libcordova[^/]*\\.so"
       ]
     },
@@ -55,8 +54,8 @@
       "name": "Ionic (web overlay)",
       "weight": 40,
       "markers": [
-        "assets/www/[^/]*/ionic[^/]*\\.(js|css)",
-        "assets/www/[^/]*/ngsw\\.json"
+        "assets/(www|public)/.*ionic[^/]*\\.(js|css)",
+        "assets/(www|public)/.*ngsw\\.json"
       ]
     },
     {

@@ -41,13 +41,24 @@ def to_row(r: Result) -> List[str]:
     return [r.source, r.verdict, r.confidence, _fmt_markers(r.markers), " | ".join(extra)]
 
 
-def _colorize(p: Palette, row: List[str]) -> List[str]:
-    out = list(row)
-    if row[1].startswith("ERROR"):
-        out[0] = p.red(row[0])
-    out[1] = style_verdict(p, row[1])
-    out[2] = p.dim(row[2])
-    return out
+def _style_cell(p: Palette, row: List[str], index: int) -> str:
+    """Style one plain cell. Returns text that may carry ANSI codes, so the
+    caller must pad using the *plain* length, never ``len()`` of the result."""
+    cell = row[index]
+    if index == 0:
+        return p.red(cell) if row[1].startswith("ERROR") else cell
+    if index == 1:
+        return style_verdict(p, cell)
+    if index == 2:
+        return p.dim(cell)
+    return cell
+
+
+def _pad(styled: str, plain: str, width: int) -> str:
+    """Pad to ``width`` counting only printable characters — ``str.ljust`` on a
+    colored cell counts the ANSI escapes and so pads by too little (or not at
+    all), which is what used to make every colored table come out ragged."""
+    return styled + " " * max(0, width - len(plain))
 
 
 def render_table(results: List[Result], palette: Optional[Palette] = None) -> str:
@@ -67,8 +78,11 @@ def render_table(results: List[Result], palette: Optional[Palette] = None) -> st
     out.append("| " + " | ".join(palette.bold(h.ljust(widths[i])) for i, h in enumerate(headers)) + " |")
     out.append(sep)
     for plain in plain_rows:
-        colored = _colorize(palette, plain)
-        out.append("| " + " | ".join(c.ljust(widths[i]) for i, c in enumerate(colored)) + " |")
+        cells = [
+            _pad(_style_cell(palette, plain, i), cell, widths[i])
+            for i, cell in enumerate(plain)
+        ]
+        out.append("| " + " | ".join(cells) + " |")
     out.append(sep)
     return "\n".join(out)
 

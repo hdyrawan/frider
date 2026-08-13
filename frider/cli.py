@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
+import shutil
 import sys
 import tempfile
 import zipfile
@@ -86,7 +88,13 @@ def _adb_classify(serial: str, packages: List[str], rules, cache_dir: str):
             continue
         _dir, count = pulled
         progress(f"  ok ({count} apk{'s' if count != 1 else ''})")
-        entries = entries_for(_dir)
+        try:
+            entries = entries_for(_dir)
+        except (ValueError, OSError) as e:
+            # A pulled set that won't open must not fall through to "native".
+            progress(f"  error: {e}")
+            results.append(_error_result(pkg, str(e)))
+            continue
         result = classify_entries(entries, rules)
         result.source = pkg
         results.append(result)
@@ -103,28 +111,44 @@ def _error_result(source: str, message: str):
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
-    rules = load_rules(args.rules)
+    try:
+        rules = load_rules(args.rules)
+    except (OSError, ValueError, re.error) as e:
+        # A bad --rules file is user input, not a crash: report it plainly.
+        print(f"frider: cannot load rules: {e}", file=sys.stderr)
+        return 2
     palette = Palette(enabled=False if args.no_color else None)
 
     results = []
+    scratch = None
     if args.adb:
         serial = args.serial or DEFAULT_ADB_SERIAL
         if not serial:
             print("frider: --adb needs a serial (pass --serial, or set ANDROID_PROBE_SERIAL)", file=sys.stderr)
             return 2
         if args.all:
-            from .adb import _run
+            from .adb import AdbError, list_third_party_packages
 
-            out = _run(["adb", "-s", serial, "shell", "pm", "list", "packages", "-3"])
-            pkgs = [ln.split(":")[-1].strip() for ln in out.splitlines() if ln.startswith("package:")]
-            packages = sorted(pkgs)
+            try:
+                packages = list_third_party_packages(serial)
+            except AdbError as e:
+                print(f"frider: {e}", file=sys.stderr)
+                return 2
         else:
             packages = args.paths
         if not packages:
             print("frider: --adb requires package names (or --all)", file=sys.stderr)
             return 2
-        cache = tempfile.mkdtemp(prefix="frider-") if args.no_cache else (args.cache_dir or default_cache_dir())
-        results = _adb_classify(serial, packages, rules, cache)
+        if args.no_cache:
+            scratch = cache = tempfile.mkdtemp(prefix="frider-")
+        else:
+            cache = args.cache_dir or default_cache_dir()
+        try:
+            results = _adb_classify(serial, packages, rules, cache)
+        finally:
+            # --no-cache promises a throwaway pull; don't leave GiB in /tmp.
+            if scratch:
+                shutil.rmtree(scratch, ignore_errors=True)
     else:
         if not args.paths:
             build_parser().print_help()
