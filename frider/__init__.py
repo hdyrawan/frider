@@ -2,8 +2,8 @@
 
 Classifies the UI framework of an Android app from its APK entry names:
 Flutter / Dart, React Native (reporting the Hermes vs JavaScriptCore engine
-split most detectors collapse), Apache Cordova, Capacitor, Ionic, Kony,
-Xamarin, Unity, or native Java/Kotlin.
+split most detectors collapse), .NET MAUI, Xamarin, Apache Cordova, Capacitor,
+Ionic, Kony, NativeScript, Qt, Titanium, Unity, or native Java/Kotlin.
 
 Zero runtime dependencies (stdlib only).
 """
