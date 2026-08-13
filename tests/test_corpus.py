@@ -33,7 +33,9 @@ UNITY = {"lib/arm64-v8a/libunity.so": b"u"}
 def put(corpus, label, name, extra):
     d = corpus / label
     d.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(d / name, "w") as z:
+    apk = d / name
+    apk.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(apk, "w") as z:
         for k, v in {**BASE, **extra}.items():
             z.writestr(k, v)
 
@@ -135,6 +137,37 @@ def test_labels_cover_every_framework_in_the_rules():
 def test_missing_corpus_directory_is_a_clean_error(tmp_path, capsys):
     assert corpus_check.main([str(tmp_path / "nope")]) == 2
     assert "not a directory" in capsys.readouterr().err
+
+
+def test_split_apk_subdirectory_is_scored_as_one_set(corpus, capsys):
+    """A split-APK pull in its own subdirectory must count as a single case.
+
+    The framework markers live in the base APK; resource-only config splits
+    carry none. Counting every file individually would misread the config
+    splits as "native" apps and drag a 3-file set down to 33% accuracy even
+    though the CLI's directory mode (which this mirrors) scores it 100%.
+    """
+    # base.apk has the framework markers; the config splits are resource-only.
+    put(corpus, "flutter", "app-split/base.apk", FLUTTER)
+    put(corpus, "flutter", "app-split/config.arm64_v8a.apk", {"resources.arsc": b"a"})
+    put(corpus, "flutter", "app-split/config.en.apk", {"res/values-en/strings.xml": b"s"})
+    # A loose single-APK case alongside must still count on its own.
+    put(corpus, "flutter", "standalone.apk", FLUTTER)
+
+    assert corpus_check.main([str(corpus)]) == 0
+    out = capsys.readouterr().out
+    assert "2/2 correct — 100.0% accuracy" in out
+
+
+def test_split_apk_set_without_framework_markers_still_fails(corpus, capsys):
+    """A subdirectory is one case, so a genuinely native split set scores as
+    a native app — and a Flutter label on it is a real, reported mismatch."""
+    put(corpus, "flutter", "mislabel-split/base.apk", {"resources.arsc": b"a"})
+    put(corpus, "flutter", "mislabel-split/config.arm64_v8a.apk", {"resources.arsc": b"a"})
+
+    assert corpus_check.main([str(corpus)]) == 1
+    out = capsys.readouterr().out
+    assert "expected flutter, got native" in out
 
 
 # ---- the real measurement, opt-in ----
