@@ -98,10 +98,23 @@ def load_rules(path: Optional[str] = None) -> Dict:
     if not isinstance(rules, dict):
         raise ValueError("rules file must contain a JSON object")
     # A kotlin block with neither key would disable Kotlin detection silently —
-    # the same misspelling in a framework entry is already a load error.
+    # the same misspelling in a framework entry is already a load error. The
+    # shape is checked too: a bare string reached `k["markers"]` and raised
+    # TypeError, which is not one of the exceptions the CLI turns into a
+    # message, and `"markers": "^x$"` degraded into one regex per character —
+    # three patterns that match nearly every entry, so every APK read as Kotlin.
     kotlin = rules.get("kotlin")
-    if kotlin is not None and not ("markers" in kotlin or "marker" in kotlin):
-        raise ValueError("kotlin rule needs 'markers' (list) or 'marker' (string)")
+    if kotlin is not None:
+        if not isinstance(kotlin, dict):
+            raise ValueError(f"kotlin rule must be an object, got {type(kotlin).__name__}")
+        if "markers" in kotlin:
+            if not isinstance(kotlin["markers"], list):
+                raise ValueError("kotlin 'markers' must be a list of patterns")
+        elif "marker" in kotlin:
+            if not isinstance(kotlin["marker"], str):
+                raise ValueError("kotlin 'marker' must be a string")
+        else:
+            raise ValueError("kotlin rule needs 'markers' (list) or 'marker' (string)")
     for fw in rules.get("frameworks", []):
         missing = [k for k in ("id", "name") if k not in fw]
         if missing:

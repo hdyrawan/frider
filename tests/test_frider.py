@@ -185,6 +185,26 @@ def test_kotlin_rule_with_neither_key_is_a_load_error(tmp_path):
         load_rules(str(bad))
 
 
+@pytest.mark.parametrize("body,match", [
+    # A bare string reached k["markers"] and raised TypeError, which main()
+    # does not catch — so a hand-edited rules file printed a traceback.
+    ('{"kotlin": "marker"}', "must be an object"),
+    ('{"kotlin": ["^x$"]}', "must be an object"),
+    ('{"kotlin": {"marker": 5}}', "'marker' must be a string"),
+    # list("^x$") is ['^', 'x', '$']: three patterns matching nearly every
+    # entry, so every APK read as Kotlin. Worse than a crash — silently wrong.
+    ('{"kotlin": {"markers": "^x$"}}', "must be a list"),
+    ('{"kotlin": {"markers": 5}}', "must be a list"),
+])
+def test_misshapen_kotlin_rule_is_a_clean_error(tmp_path, body, match):
+    """`main()` catches OSError, ValueError and re.error and turns them into a
+    one-line message; anything else reaches the user as a traceback."""
+    bad = tmp_path / "bad-shape.json"
+    bad.write_text(body, encoding="utf-8")
+    with pytest.raises(ValueError, match=match):
+        load_rules(str(bad))
+
+
 def test_hybrid(hybrid_apk):
     r = classify(str(hybrid_apk))
     assert r.verdict == "Hybrid (Flutter + React Native)"

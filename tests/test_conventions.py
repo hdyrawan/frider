@@ -79,12 +79,20 @@ def test_no_scanned_banking_app_is_named_in_the_tree():
     packer is a target list tied to a named institution. Findings from such an
     app go in generically; the detail lives in the private repo."""
     here = pathlib.Path(__file__).resolve()
+    # .github is deliberately scanned; only caches, build output and any local
+    # corpus are skipped.
+    skip_dirs = {".git", ".ruff_cache", ".pytest_cache", ".mypy_cache", "__pycache__",
+                 ".venv", "venv", "node_modules", "dist", "build", "corpus"}
+    text_suffixes = {".md", ".py", ".json", ".yml", ".yaml", ".toml", ".txt", ".cfg"}
     leaked = []
-    for path in list(ROOT.glob("*.md")) + list((ROOT / "tests").glob("*.py")) + \
-            list((ROOT / "frider").glob("*.py")) + [RULES_JSON]:
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix not in text_suffixes:
+            continue
+        if any(part in skip_dirs for part in path.relative_to(ROOT).parts[:-1]):
+            continue
         if path.resolve() == here:
             continue  # this file necessarily spells the names it searches for
-        text = path.read_text(encoding="utf-8").lower()
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
         for needle in ("digibank", "bumi arta", "mlpt.siemo"):
             if needle in text:
                 leaked.append(f"{path.name}: {needle}")
