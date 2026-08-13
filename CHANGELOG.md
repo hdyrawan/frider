@@ -37,6 +37,15 @@ All notable changes to this project are documented here. This project follows
 
 ### Fixed
 
+- **An asset marker could claim a framework on its own.** `assets/index.android.bundle`
+  alone was enough for a React Native verdict — but Android loads nothing from
+  `assets/`, and a shipped bundle with no engine to execute it is a payload, not
+  a framework. Found on a real app: a banking app ships a vestigial RN bundle on
+  a Flutter host and was misreported hybrid. Frameworks can now declare
+  `requires` (runtime `.so` markers) that must match before the framework is
+  claimed; asset markers corroborate but cannot fire alone. Flutter and RN both
+  declare `requires`; a full 141-package device sweep changed only that one
+  verdict after the fix.
 - **`Entry.match_path()` could silently truncate a path containing `!`.**
   When `inner` was missing, it fell back to re-deriving the path from the
   display string by splitting on `!` — legal in zip entry names — so a
