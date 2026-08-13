@@ -1,5 +1,14 @@
 # frider
 
+```
+ ______        _      _
+|  ___|      (_)    | |
+| |_    _ __  _   __| |  ___  _ __
+|  _|  | '__|| | / _` | / _ \| '__|
+| |    | |   | || (_| ||  __/| |
+\_|    |_|   |_| \__,_| \___||_|
+```
+
 Android app **fr**amework **ider** — detect the UI framework of an Android app
 from its APK contents: **Flutter / Dart**, **React Native** (with the **Hermes vs
 JavaScriptCore** engine split most detectors miss), **Apache Cordova**, **Ionic**,

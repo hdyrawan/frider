@@ -25,7 +25,7 @@ from . import __version__
 from .apk import entries_for
 from .rules import classify_entries, load_rules
 from .report import render_json, render_table
-from .ui import Palette, progress, summarize
+from .ui import BANNER, Palette, progress, summarize
 
 DEFAULT_ADB_SERIAL = os.environ.get("ANDROID_PROBE_SERIAL", "")
 
@@ -39,9 +39,15 @@ def default_cache_dir() -> str:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="frider",
-        description="Android app framework detector (Flutter / React Native / "
-                    "Cordova / Ionic / Capacitor / Kony / Xamarin / Unity / native).",
-        epilog="A path can be an .apk, an .xapk/.apks container, or a directory "
+        # Raw formatter, or argparse reflows the banner into a paragraph.
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=BANNER.strip("\n") + "\n\n"
+                    "Android app framework detector. Classifies Flutter / Dart,\n"
+                    "React Native (reporting the Hermes vs JavaScriptCore engine\n"
+                    "split most detectors collapse), Apache Cordova, Ionic,\n"
+                    "Capacitor, Kony, Xamarin, Unity, or native Java/Kotlin —\n"
+                    "from APK entry names alone, never file contents.",
+        epilog="A path can be an .apk, an .xapk/.apks container, or a directory\n"
                "of APKs. With --adb, positional arguments are package names.",
     )
     p.add_argument("paths", nargs="*",
