@@ -45,3 +45,23 @@ false positives and belong out of the marker list.
 
 Classification reads entry *names* only; it never reads file contents. Keep
 readers lazy so a large directory does not pull payloads into memory.
+
+Report cells must stay single-line. Error text can carry embedded newlines
+(adb relays multi-line stderr), and a newline inside a cell tears the table
+apart; `--json` is where the full text belongs.
+
+## Releasing
+
+The version lives in `frider/__init__.py` and nowhere else — `pyproject.toml`
+reads it from there, so bumping one bumps both.
+
+1. Bump `__version__`, commit, and merge to `main`.
+2. Wait for the test matrix to pass.
+3. Run the `publish` workflow manually against **testpypi** and install the
+   result in a clean environment.
+4. Tag `vX.Y.Z` and publish a GitHub release; that uploads to PyPI.
+
+Uploads use Trusted Publishing (OIDC), so there is no API token in this
+repository. The publish workflow refuses to run if the tag and
+`__version__` disagree. PyPI never allows a version number to be reused, so a
+bad release costs a patch bump — the TestPyPI step is not optional.

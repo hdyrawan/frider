@@ -631,3 +631,19 @@ def test_adb_error_has_no_trailing_newline_when_stderr_is_empty(monkeypatch):
         apk_paths("SERIAL", "com.example")
     assert str(exc.value) == str(exc.value).strip()
     assert "\n" not in str(exc.value)
+
+
+def test_version_is_declared_in_exactly_one_place():
+    """Regression: the version lived in both pyproject.toml and __init__.py.
+    Once they drifted, `frider --version` would disagree with the installed
+    wheel. pyproject now reads it from the package."""
+    import pathlib
+
+    import frider
+
+    pyproject = (pathlib.Path(__file__).resolve().parent.parent
+                 / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'dynamic = ["version"]' in pyproject
+    assert not re.search(r'^version = "', pyproject, re.M), \
+        "pyproject hardcodes a version again"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", frider.__version__)
