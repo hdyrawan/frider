@@ -78,6 +78,15 @@ list. When a framework cannot be distinguished from entry names alone, say so
 in the README's "Known limits" and add no rule: reporting `native` is better
 than a guess. Kotlin/Compose Multiplatform are absent for exactly this reason.
 
+**Anchor every marker to the whole entry path** (`^...$`, or `^...` for a
+directory prefix). Unanchored markers are substring searches, so a bundled copy
+under `assets/` or a renamed `.so.bak` matched a library Android would never
+load. A test fails if an unanchored marker appears.
+
+Match on `Entry.match_path()`, never on `innermost(entry.path)`. The `!`
+container boundary is display-only; `!` is legal in a zip entry name, so parsing
+it back out truncates real paths.
+
 Ties break on `weight`, then on distinct entries matched, so a specific rule can
 be weighted above a general one it overlaps with (`maui` above `xamarin`).
 

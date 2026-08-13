@@ -359,8 +359,14 @@ traceback, so a batch over a hundred APKs always finishes and always reports.
 ```
 
 Markers are regular expressions matched (case-insensitive) against every APK
-entry path; the innermost path is used, so `container.xapk!app.apk!lib/...`
-matches the same rules as a flat APK. A framework wins by marker presence;
+entry path, **anchored to the whole path** — `^lib/[^/]+/libflutter\.so$`, not
+a substring search. Android only loads `lib/<abi>/*.so` from the archive root, so
+a bundled copy under `assets/` or a renamed `.so.bak` is a payload rather than a
+framework, and must not match. A marker ending in `/` is a directory prefix and
+is anchored only at the start.
+
+Inside a container, rules match the inner APK's own path, so
+`container.xapk!app.apk!lib/...` matches the same rules as a flat APK. A framework wins by marker presence;
 ties break on `weight`, then on the number of distinct entries matched — so a
 more specific rule outranks a general one it overlaps with (`maui` above
 `xamarin`). An app with both Flutter and React Native markers is reported as

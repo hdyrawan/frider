@@ -37,6 +37,17 @@ All notable changes to this project are documented here. This project follows
 
 ### Fixed
 
+- **A path containing `!` matched markers that were not there.** The container
+  boundary in a display path was parsed back out by splitting on `!`, which is
+  a legal zip entry-name character — so `assets/we!rd/lib/.../libflutter.so`
+  was read as `rd/lib/.../libflutter.so`, mis-citing the evidence. The match
+  path now travels alongside the display path instead of being re-derived.
+- **Markers were unanchored substring searches.** A bundled copy under
+  `assets/`, a renamed `.so.bak`, or a library path under `META-INF/` matched a
+  framework, though Android only loads `lib/<abi>/*.so` from the archive root.
+  An APK with no native libraries at all could report Flutter. Every marker is
+  now anchored to the whole entry path, and a test fails if an unanchored one
+  reappears.
 - **Colored tables came out ragged.** Cells were padded after ANSI codes were
   added, so the escapes counted toward the width — the default interactive
   output was broken.
