@@ -15,9 +15,10 @@
 
 Android app **fr**amework **ider** — classifies the UI framework of an Android
 app from its APK entry names: **Flutter / Dart**, **React Native** (reporting the
-**Hermes vs JavaScriptCore** engine split most detectors collapse), **Apache
-Cordova**, **Capacitor**, **Ionic**, **Kony (Temenos)**, **Xamarin / .NET**,
-**Unity**, or **native Java/Kotlin**. Zero runtime dependencies — pure Python
+**Hermes vs JavaScriptCore** engine split most detectors collapse), **.NET
+MAUI**, **Xamarin**, **Apache Cordova**, **Capacitor**, **Ionic**, **Kony
+(Temenos)**, **NativeScript**, **Qt**, **Titanium**, **Unity**, or **native
+Java/Kotlin**. Zero runtime dependencies — pure Python
 standard library.
 
 Fingerprints are **data, not code**: rules live in `frider/rules.json`, so
@@ -183,13 +184,30 @@ which answer it happened to reach.
 `Low` never means "the answer was native". Absence of every marker across a
 package that frider fully read is real evidence, and reports `High`.
 
+### Known limits
+
+Classification reads entry **names** only, never file contents, which bounds
+what can be distinguished:
+
+- **.NET MAUI vs plain .NET Android.** MAUI is named only when its assemblies
+  ship as individual `.dll` entries. Release builds default to
+  `AndroidUseAssemblyStore`, which packs them into `assemblies/*.blob` — the
+  names are inside the blob, so those apps report `xamarin` (accurate: they
+  *are* .NET) rather than `maui`.
+- **Kotlin Multiplatform and Compose Multiplatform are not detected**, and
+  deliberately have no rules. They compile to ordinary Android code with no
+  distinguishing entry names; any marker specific enough to be safe would miss
+  most builds, and anything broader would fire on plain Kotlin apps. Adding a
+  guess here would be worse than reporting `native`.
+
 ### JSON output
 
 `--json` emits a versioned envelope. Branch on **`framework`**, which is a
-stable id (`flutter`, `react-native`, `cordova`, `capacitor`, `ionic`, `kony`,
-`xamarin`, `unity`, plus `native`, `hybrid` and `error`). `verdict` is prose for
-humans and may be reworded between releases; `matched_files` names the real APK
-entries behind the call, so a verdict can be audited rather than trusted.
+stable id (`flutter`, `react-native`, `maui`, `xamarin`, `cordova`, `capacitor`,
+`ionic`, `kony`, `nativescript`, `qt`, `titanium`, `unity`, plus `native`,
+`hybrid` and `error`). `verdict` is prose for humans and may be reworded between
+releases; `matched_files` names the real APK entries behind the call, so a
+verdict can be audited rather than trusted.
 
 ```json
 {
