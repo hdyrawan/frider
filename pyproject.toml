@@ -22,8 +22,12 @@ classifiers = [
     "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    # Every entry must appear in PyPI's canonical list or the upload is
+    # rejected with a 400; "Reverse Engineering" reads plausibly but is not a
+    # real classifier. Disassemblers is the nearest one that exists.
+    "Topic :: Security",
+    "Topic :: Software Development :: Disassemblers",
     "Topic :: Software Development :: Quality Assurance",
-    "Topic :: Software Development :: Reverse Engineering",
     "Topic :: Utilities",
 ]
 
