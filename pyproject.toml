@@ -9,7 +9,12 @@ description = "Android app framework detector — classifies Flutter / Dart, Rea
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-keywords = ["android", "apk", "framework", "detector", "flutter", "react-native", "apkid"]
+keywords = [
+    "android", "apk", "framework", "detector", "reverse-engineering",
+    "flutter", "react-native", "hermes", "javascriptcore",
+    "cordova", "capacitor", "ionic", "kony", "xamarin", "unity",
+    "apkid",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -21,6 +26,11 @@ classifiers = [
     "Topic :: Software Development :: Reverse Engineering",
     "Topic :: Utilities",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hdyrawan/frider"
+Source = "https://github.com/hdyrawan/frider"
+Issues = "https://github.com/hdyrawan/frider/issues"
 
 [project.scripts]
 frider = "frider.cli:main"
