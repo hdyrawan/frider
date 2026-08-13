@@ -40,12 +40,18 @@ class Entry:
     # is also a legal character in a zip entry name, so recovering the inner
     # path by splitting on it truncated names like ``assets/we!rd/lib/...`` —
     # which both mis-cited the evidence and let an unrelated entry match a
-    # marker. Set at construction, where the boundary is actually known.
-    inner: Optional[str] = None
+    # marker. Set at construction, where the boundary is actually known, and
+    # REQUIRED: a fallback that re-derives it from ``path`` would silently
+    # reopen the truncation bug for any caller who forgets it.
+    inner: str
 
     def match_path(self) -> str:
-        """The path a rule should be tested against."""
-        return self.inner if self.inner is not None else innermost(self.path)
+        """The path a rule should be tested against.
+
+        This is always the inner path carried at construction — never parsed
+        back out of the display ``path``.
+        """
+        return self.inner
 
 
 def _make_file_reader(path: str, name: str) -> Callable[[], bytes]:
