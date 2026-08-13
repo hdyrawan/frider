@@ -105,7 +105,7 @@ python3 -m pytest tests/   # run the test suite
 ### Verify & uninstall
 
 ```bash
-frider --version        # e.g. "frider 0.2.0"
+frider --version        # e.g. "frider 0.3.0"
 frider --help           # full usage
 pipx uninstall frider   # or: uv tool uninstall frider / pip uninstall frider
 ```
@@ -296,7 +296,7 @@ verdict can be audited rather than trusted.
 {
   "schema_version": 1,
   "tool": "frider",
-  "tool_version": "0.2.0",
+  "tool_version": "0.3.0",
   "results": [
     {
       "source": "rn.apk",

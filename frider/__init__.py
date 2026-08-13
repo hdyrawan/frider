@@ -8,4 +8,4 @@ Ionic, Kony, Lynx, NativeScript, Qt, Titanium, Unity, or native Java/Kotlin.
 Zero runtime dependencies (stdlib only).
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
