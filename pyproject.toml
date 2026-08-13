@@ -44,7 +44,17 @@ packages = ["frider"]
 version = { attr = "frider.__version__" }
 
 [tool.setuptools.package-data]
-frider = ["rules.json"]
+frider = ["rules.json", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+# Rules that catch defects, not style opinions. `UP` is deliberately off: this
+# package supports 3.9, and rewriting every List/Optional annotation is churn
+# with no behavioural benefit.
+select = ["E", "F", "W", "B", "I", "C4"]

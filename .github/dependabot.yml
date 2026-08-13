@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # frider has no runtime dependencies, so Actions are the only supply chain
+  # here — and they are pinned by SHA, which never expires on its own.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
