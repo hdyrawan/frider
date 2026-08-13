@@ -7,6 +7,7 @@ a cache directory. Requires adb on PATH and a reachable device.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from typing import List, Optional, Tuple
@@ -19,6 +20,22 @@ PULL_TIMEOUT = 600
 
 class AdbError(RuntimeError):
     pass
+
+
+# An Android package name is dot-separated Java identifiers and nothing else.
+# This is a security boundary, not tidiness: the name becomes a directory under
+# the cache, and that directory is deleted before each pull. A device reporting
+# "../../something" would have rmtree'd a path outside the cache entirely, and
+# an absolute name would have discarded the cache root outright, because
+# os.path.join("/cache", "/etc/x") is "/etc/x".
+_PACKAGE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$")
+
+
+def check_package_name(pkg: str) -> str:
+    """Return ``pkg`` if it is a legal Android package name, else raise."""
+    if not _PACKAGE_NAME.match(pkg):
+        raise AdbError(f"refusing implausible package name: {pkg!r}")
+    return pkg
 
 
 def _run(cmd: List[str], timeout: int = SHELL_TIMEOUT) -> str:
@@ -44,6 +61,7 @@ def _packages_from(out: str) -> List[str]:
 
 def apk_paths(serial: str, pkg: str) -> List[str]:
     """Every APK path the package manager reports for the package."""
+    check_package_name(pkg)
     return _packages_from(_run(["adb", "-s", serial, "shell", "pm", "path", pkg]))
 
 
@@ -58,10 +76,16 @@ def pull_package(serial: str, pkg: str, out_dir: str) -> Optional[Tuple[str, int
     ``(dir, apk_count)``, or None if the package is not installed. The returned
     dir works with ``frider.apk.entries_for``. Any failed pull raises
     ``AdbError`` so a broken half-pulled set is never classified as "native"."""
+    check_package_name(pkg)
     paths = apk_paths(serial, pkg)
     if not paths:
         return None
     d = os.path.join(out_dir, pkg)
+    # Belt and braces: even with the name validated, never delete or write
+    # outside the cache root.
+    root = os.path.abspath(out_dir)
+    if os.path.commonpath([root, os.path.abspath(d)]) != root:
+        raise AdbError(f"refusing to pull outside the cache dir: {pkg!r}")
     # Wipe first: the cache dir is reused across runs, and a package that used
     # to ship more splits (or a different app version) would otherwise leave
     # stale apk_N.apk files behind that get classified as part of this set.

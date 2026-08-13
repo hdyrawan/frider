@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from . import __version__
 from .rules import Result
-from .ui import Palette, style_verdict
+from .ui import Palette, display_width, style_verdict
 
 # Bumped whenever a --json field changes meaning or is removed.
 SCHEMA_VERSION = 1
@@ -67,10 +67,13 @@ def _style_cell(p: Palette, row: List[str], index: int) -> str:
 
 
 def _pad(styled: str, plain: str, width: int) -> str:
-    """Pad to ``width`` counting only printable characters — ``str.ljust`` on a
-    colored cell counts the ANSI escapes and so pads by too little (or not at
-    all), which is what used to make every colored table come out ragged."""
-    return styled + " " * max(0, width - len(plain))
+    """Pad to ``width`` in terminal columns.
+
+    Two things make ``str.ljust`` wrong here. It counts ANSI escapes, which used
+    to make every colored table ragged; and it counts characters rather than
+    columns, so a CJK filename — double-width in a terminal — overflows its cell.
+    """
+    return styled + " " * max(0, width - display_width(plain))
 
 
 def render_table(results: List[Result], palette: Optional[Palette] = None) -> str:
@@ -79,15 +82,15 @@ def render_table(results: List[Result], palette: Optional[Palette] = None) -> st
     palette = palette or Palette()
     headers = ["source", "verdict", "confidence", "markers", "notes"]
     plain_rows = [to_row(r) for r in results]
-    widths = [len(h) for h in headers]
+    widths = [display_width(h) for h in headers]
     for row in plain_rows:
         for i, cell in enumerate(row):
-            widths[i] = max(widths[i], len(cell))
+            widths[i] = max(widths[i], display_width(cell))
 
     out = []
     sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
     out.append(sep)
-    header_cells = [palette.bold(h.ljust(widths[i])) for i, h in enumerate(headers)]
+    header_cells = [palette.bold(_pad(h, h, widths[i])) for i, h in enumerate(headers)]
     out.append("| " + " | ".join(header_cells) + " |")
     out.append(sep)
     for plain in plain_rows:

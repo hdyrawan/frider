@@ -992,3 +992,97 @@ def test_match_path_returns_the_carried_inner_path_not_the_display_path():
                       inner="lib/arm64-v8a/libflutter.so")
     assert container.match_path() == "lib/arm64-v8a/libflutter.so"
     assert container.path == "bundle.xapk!app.apk!lib/arm64-v8a/libflutter.so"
+# ---- adb package names are a path, and therefore a trust boundary ----
+
+@pytest.mark.parametrize("hostile", [
+    "../victim",
+    "../../etc",
+    "/etc/frider",
+    "com.example/../../..",
+    "a\nb",
+    "",
+    ".hidden",
+])
+def test_an_implausible_package_name_is_refused(hostile):
+    """Regression: the package name becomes a cache directory that is deleted
+    before each pull, so a device reporting '../victim' rmtree'd a path outside
+    the cache — and an absolute name discarded the cache root entirely, because
+    os.path.join('/cache', '/etc/x') is '/etc/x'."""
+    from frider.adb import AdbError, check_package_name
+
+    with pytest.raises(AdbError, match="implausible package name"):
+        check_package_name(hostile)
+
+
+@pytest.mark.parametrize("legal", [
+    "com.example.app",
+    "com.example.app_2",
+    "a.b",
+    "com.example.app.free.v2",
+])
+def test_real_package_names_are_accepted(legal):
+    from frider.adb import check_package_name
+
+    assert check_package_name(legal) == legal
+
+
+def test_a_hostile_package_name_cannot_delete_outside_the_cache(tmp_path, monkeypatch):
+    """End to end: the pull refuses before rmtree runs."""
+    import subprocess as sp
+
+    from frider.adb import AdbError, pull_package
+
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    keep = victim / "keepme.txt"
+    keep.write_text("important", encoding="utf-8")
+    cache = tmp_path / "cache"
+    cache.mkdir()
+
+    def fake_run(cmd, **kw):
+        return sp.CompletedProcess(cmd, 0, "package:/data/app/base.apk\n", "")
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    with pytest.raises(AdbError):
+        pull_package("SERIAL", "../victim", str(cache))
+
+    assert keep.exists(), "the pull deleted a directory outside the cache"
+    assert keep.read_text(encoding="utf-8") == "important"
+
+
+# ---- table alignment counts terminal columns, not characters ----
+
+def test_wide_characters_do_not_break_alignment():
+    """Regression: widths were computed with len(), but a terminal draws CJK
+    double-width — so a table of CJK app names came out ragged on screen even
+    though every row had an equal character count."""
+    import unicodedata
+
+    from frider.report import render_table
+    from frider.rules import Result
+    from frider.ui import Palette
+
+    def columns(s):
+        return sum(0 if unicodedata.combining(c)
+                   else (2 if unicodedata.east_asian_width(c) in ("W", "F") else 1)
+                   for c in s)
+
+    results = [
+        Result(source="中文アプリ.apk", verdict="Flutter / Dart", confidence="High"),
+        Result(source="plain.apk", verdict="Unity", confidence="High"),
+    ]
+    for palette in (Palette(enabled=False), Palette(enabled=True)):
+        out = render_table(results, palette=palette)
+        visible = [re.sub(r"\x1b\[[0-9;]*m", "", ln) for ln in out.splitlines()]
+        assert len({columns(v) for v in visible}) == 1, (
+            f"ragged in terminal columns (colors={palette.enabled}): "
+            f"{[columns(v) for v in visible]}"
+        )
+
+
+def test_display_width_counts_columns():
+    from frider.ui import display_width
+
+    assert display_width("abc") == 3
+    assert display_width("中文") == 4
+    assert display_width("é") == 1, "a combining accent takes no column"
