@@ -23,8 +23,8 @@ from typing import List, Optional
 
 from . import __version__
 from .apk import entries_for
-from .rules import classify_entries, load_rules
 from .report import render_json, render_table
+from .rules import classify_entries, load_rules
 from .ui import BANNER, Palette, progress, summarize
 
 DEFAULT_ADB_SERIAL = os.environ.get("ANDROID_PROBE_SERIAL", "")
@@ -133,7 +133,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.adb:
         serial = args.serial or DEFAULT_ADB_SERIAL
         if not serial:
-            print("frider: --adb needs a serial (pass --serial, or set ANDROID_PROBE_SERIAL)", file=sys.stderr)
+            print("frider: --adb needs a serial (pass --serial, or set "
+                  "ANDROID_PROBE_SERIAL)", file=sys.stderr)
             return 2
         if args.all:
             from .adb import AdbError, list_third_party_packages
