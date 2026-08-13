@@ -37,6 +37,14 @@ All notable changes to this project are documented here. This project follows
 
 ### Fixed
 
+- **Kotlin went undetected on R8-minified apps.** The `kotlin` signal keyed on a
+  single marker, `META-INF/*.kotlin_module` — which R8 strips during minification.
+  Every minified Kotlin app (i.e. most shipping apps) therefore read `kotlin: false`.
+  The rule now accepts a `markers` list and also matches `kotlin/*.kotlin_builtins`
+  and the `kotlinx *.version` stamps, both of which survive minification. The legacy
+  single-`marker` form still loads. Found on a shipping banking app
+  (`a shipping banking app`): a Kotlin app with no `.kotlin_module`, previously
+  reported `kotlin: false`, now `true`; framework verdict (native) was correct throughout.
 - **An asset marker could claim a framework on its own.** `assets/index.android.bundle`
   alone was enough for a React Native verdict — but Android loads nothing from
   `assets/`, and a shipped bundle with no engine to execute it is a payload, not

@@ -137,6 +137,32 @@ def test_native_with_kotlin_and_notable_lib(native_apk):
     assert any("RootBeer" in label for label in r.notable_libs)
 
 
+def test_kotlin_detected_when_r8_strips_kotlin_module(tmp_path):
+    """R8 minification strips ``.kotlin_module`` but keeps ``kotlin/*.kotlin_builtins``
+    and the ``kotlinx *.version`` stamps. A real Kotlin app must still read as
+    Kotlin. Regression for a real banking-app miss (2026-08-13)."""
+    apk = make_apk(tmp_path / "r8-kotlin.apk", {
+        "AndroidManifest.xml": b"<manifest/>",
+        "classes.dex": b"dex",
+        "kotlin/kotlin.kotlin_builtins": b"k",
+        "META-INF/kotlinx_coroutines_core.version": b"1.7",
+    })
+    r = classify(str(apk))
+    assert r.framework == "native"
+    assert r.kotlin is True
+
+
+def test_no_kotlin_stays_false(tmp_path):
+    """A plain Java app (no Kotlin markers) must not be misread as Kotlin."""
+    apk = make_apk(tmp_path / "plain-java.apk", {
+        "AndroidManifest.xml": b"<manifest/>",
+        "classes.dex": b"dex",
+        "META-INF/androidx.core_core.version": b"1.0",
+    })
+    r = classify(str(apk))
+    assert r.kotlin is False
+
+
 def test_hybrid(hybrid_apk):
     r = classify(str(hybrid_apk))
     assert r.verdict == "Hybrid (Flutter + React Native)"
