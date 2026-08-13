@@ -37,6 +37,14 @@ All notable changes to this project are documented here. This project follows
 
 ### Fixed
 
+- **`Entry.match_path()` could silently truncate a path containing `!`.**
+  When `inner` was missing, it fell back to re-deriving the path from the
+  display string by splitting on `!` — legal in zip entry names — so a
+  directly-constructed entry like `assets/we!rd/lib/...` could be read as
+  `rd/lib/...` and match markers that were not there. The inner path is now
+  required at construction: a caller who omits it gets a loud `TypeError`
+  instead of a misclassification. `innermost()` remains for parsing display
+  paths.
 - **A path containing `!` matched markers that were not there.** The container
   boundary in a display path was parsed back out by splitting on `!`, which is
   a legal zip entry-name character — so `assets/we!rd/lib/.../libflutter.so`
