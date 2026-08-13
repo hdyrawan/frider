@@ -14,6 +14,13 @@ from .rules import Result
 from .ui import Palette, style_verdict
 
 
+def _oneline(text: str) -> str:
+    """Collapse whitespace so a cell can never span rows. adb surfaces
+    multi-line stderr in error messages, and a newline inside a cell tears the
+    table apart — the full text is still intact in --json."""
+    return " ".join(text.split())
+
+
 def _fmt_markers(markers) -> str:
     parts = []
     for fw, paths in markers.items():
@@ -38,7 +45,8 @@ def to_row(r: Result) -> List[str]:
         extra.append("libs=" + ",".join(r.notable_libs))
     if r.errors:
         extra.append("errors=" + ";".join(r.errors))
-    return [r.source, r.verdict, r.confidence, _fmt_markers(r.markers), " | ".join(extra)]
+    row = [r.source, r.verdict, r.confidence, _fmt_markers(r.markers), " | ".join(extra)]
+    return [_oneline(cell) for cell in row]
 
 
 def _style_cell(p: Palette, row: List[str], index: int) -> str:

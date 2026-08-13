@@ -592,3 +592,42 @@ def test_every_description_names_every_framework(source):
 def test_descriptions_agree_on_apache_cordova():
     for source, text in _all_descriptions().items():
         assert "Apache Cordova" in text or "Apache\nCordova" in text, source
+
+
+def test_multiline_error_cannot_break_the_table():
+    """Regression: adb surfaces multi-line stderr in its error messages, and a
+    newline inside a cell tore the table into ragged rows."""
+    from frider.report import render_table
+    from frider.rules import Result
+    from frider.ui import Palette
+
+    r = Result(source="com.demo.rn", verdict="ERROR", confidence="-")
+    r.errors.append("command failed: adb -s X pull /data/app/base.apk\n"
+                    "error: device offline\nmore detail")
+    out = render_table([r], palette=Palette(enabled=False))
+    assert len(set(len(l) for l in out.splitlines())) == 1, "ragged table"
+    assert "device offline" in out
+
+
+def test_json_keeps_the_full_multiline_message():
+    """Only the table collapses whitespace; --json stays verbatim."""
+    import json
+
+    from frider.report import render_json
+    from frider.rules import Result
+
+    r = Result(source="com.demo.rn", verdict="ERROR", confidence="-")
+    r.errors.append("line one\nline two")
+    assert json.loads(render_json([r]))[0]["errors"] == ["line one\nline two"]
+
+
+def test_adb_error_has_no_trailing_newline_when_stderr_is_empty(monkeypatch):
+    import subprocess as sp
+
+    from frider.adb import AdbError, apk_paths
+
+    monkeypatch.setattr(sp, "run", lambda cmd, **kw: sp.CompletedProcess(cmd, 1, "", ""))
+    with pytest.raises(AdbError) as exc:
+        apk_paths("SERIAL", "com.example")
+    assert str(exc.value) == str(exc.value).strip()
+    assert "\n" not in str(exc.value)
