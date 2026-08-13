@@ -49,6 +49,36 @@ def test_agents_file_covers(topic, needle):
     assert needle in AGENTS.read_text(encoding="utf-8"), f"AGENTS.md no longer covers {topic}"
 
 
+def _workflow_action_pins():
+    """(action, ref, workflow file) for every `uses:` pin in .github/workflows."""
+    out = []
+    uses = re.compile(r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)")
+    for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        for action, ref in uses.findall(wf.read_text(encoding="utf-8")):
+            out.append((action, ref, wf.name))
+    return out
+
+
+def test_every_action_resolves_to_one_ref_across_workflows():
+    """A second workflow pinning an older ref of the same action goes stale
+    silently: Dependabot sees the newer pin, treats the dependency as current,
+    and stops reporting the one left behind. That happened to
+    `upload-artifact`, pinned at v7.0.1 in one workflow and v4 in another."""
+    by_action = {}
+    for action, ref, wf in _workflow_action_pins():
+        by_action.setdefault(action, {}).setdefault(ref, []).append(wf)
+    diverged = {a: refs for a, refs in by_action.items() if len(refs) > 1}
+    assert not diverged, f"same action pinned to different refs:\n  {diverged}"
+
+
+def test_every_action_is_pinned_to_a_commit_sha():
+    """A tag can be repointed at new code by whoever owns the action; a commit
+    SHA cannot. The pins are the supply-chain boundary for this repository."""
+    loose = [f"{wf}: {action}@{ref}" for action, ref, wf in _workflow_action_pins()
+             if not re.fullmatch(r"[0-9a-f]{40}", ref)]
+    assert not loose, f"actions must be pinned by 40-character SHA:\n  {loose}"
+
+
 def test_readme_documents_every_framework_id():
     """`framework` is the documented, stable id callers branch on. Adding a
     fingerprint without listing it leaves the contract's own docs wrong — which
