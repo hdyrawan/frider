@@ -17,8 +17,8 @@ Android app **fr**amework **ider** — classifies the UI framework of an Android
 app from its APK entry names: **Flutter / Dart**, **React Native** (reporting the
 **Hermes vs JavaScriptCore** engine split most detectors collapse), **.NET
 MAUI**, **Xamarin**, **Apache Cordova**, **Capacitor**, **Ionic**, **Kony
-(Temenos)**, **NativeScript**, **Qt**, **Titanium**, **Unity**, or **native
-Java/Kotlin**. Zero runtime dependencies — pure Python
+(Temenos)**, **Lynx (ByteDance)**, **NativeScript**, **Qt**, **Titanium**,
+**Unity**, or **native Java/Kotlin**. Zero runtime dependencies — pure Python
 standard library.
 
 Fingerprints are **data, not code**: rules live in `frider/rules.json`, so
@@ -259,12 +259,35 @@ what can be distinguished:
   distinguishing entry names; any marker specific enough to be safe would miss
   most builds, and anything broader would fire on plain Kotlin apps. Adding a
   guess here would be worse than reporting `native`.
+- **A build that excludes Kotlin's packaged resources reads `kotlin: false`.**
+  Every Kotlin marker is a resource entry, and a build can drop all of them
+  (`packagingOptions { resources.excludes += ["kotlin/**", "META-INF/*.version"] }`,
+  common in size-tuned apps). The Kotlin code is then visible only inside the
+  dex, which classification never reads. Measured on a 141-app device sweep:
+  8 of 132 apps with readable dex were Kotlin apps shipping no Kotlin resource
+  at all — every one of them a large first-party app from a platform vendor.
+- **`kotlin: true` means the Kotlin runtime is packaged, not that the app's own
+  code is Kotlin.** `kotlin/*.kotlin_builtins` and the `kotlinx *.version`
+  stamps ship with the Kotlin standard library, so an app whose own sources are
+  Java but which depends on one Kotlin library reports `true`. One such app
+  turned up in the same sweep. Only `.kotlin_module` implies Kotlin compilation
+  of a module, and R8 strips it.
+- **Native libraries packed into a container hide the engine's name.** An app
+  that ships its `.so` files inside a compressed blob — Meta's Superpack
+  (`libsuperpack-jni.so`, `libhelium.so`) is the case seen in the wild — exposes
+  no `libhermes.so`/`libjsc.so` entry to match, so it can report `native` while
+  embedding a framework. Instagram is the worked example: its dex carries the
+  full React Native class tree, but no engine name appears in any entry.
+  Detecting this needs the blob's contents, which is out of scope by design.
+  Note the *opposite* case is fine: dex-encrypting packers (SecNeo DexHelper,
+  SecIron AppGuard) leave `lib/` untouched, so verdicts stay correct on
+  protected apps even when the dex is unreadable.
 
 ### JSON output
 
 `--json` emits a versioned envelope. Branch on **`framework`**, which is a
 stable id (`flutter`, `react-native`, `maui`, `xamarin`, `cordova`, `capacitor`,
-`ionic`, `kony`, `nativescript`, `qt`, `titanium`, `unity`, plus `native`,
+`ionic`, `kony`, `lynx`, `nativescript`, `qt`, `titanium`, `unity`, plus `native`,
 `hybrid` and `error`). `verdict` is prose for humans and may be reworded between
 releases; `matched_files` names the real APK entries behind the call, so a
 verdict can be audited rather than trusted.
@@ -340,7 +363,13 @@ traceback, so a batch over a hundred APKs always finishes and always reports.
     "manifest": "^AndroidManifest\\.xml$",
     "code": "^classes[0-9]*\\.dex$"
   },
-  "kotlin": { "marker": "^META-INF/.*\\.kotlin_module$" },
+  "kotlin": {
+    "markers": [
+      "^META-INF/.*\\.kotlin_module$",
+      "^kotlin/.*\\.kotlin_builtins$",
+      "^META-INF/kotlin(x)?[-_].*\\.version$"
+    ]
+  },
   "frameworks": [
     {
       "id": "react-native",
@@ -384,9 +413,15 @@ asset markers: a shipped `assets/index.android.bundle` (React Native) or
 `flutter_assets/` dir (Flutter) is only evidence if the APK also contains an
 engine to execute it. Android loads nothing from `assets/`, so a bundle with no
 `libhermes`/`libjsc`/`libreactnative` is a dead copy, not React Native — found
-on a real app (VCB Digibank) that shipped a vestigial RN bundle on a Flutter
+on a real banking app that shipped a vestigial RN bundle on a Flutter
 host and was misreported hybrid until `requires` was added. Asset-only markers
 without `requires` risk the same false positive.
+
+**The `kotlin` block takes a `markers` list** — several markers because no
+single one survives every build. `.kotlin_module` is stripped by R8, while
+`kotlin/*.kotlin_builtins` and the `kotlinx *.version` stamps usually survive
+minification. A legacy single `"marker": "..."` string is still accepted so an
+older custom rules file keeps loading.
 
 Inside a container, rules match the inner APK's own path, so
 `container.xapk!app.apk!lib/...` matches the same rules as a flat APK. A framework wins by marker presence;
@@ -405,6 +440,32 @@ Every fixture in `tests/` is a synthetic zip built from the same assumptions
 the rules were written from, so the suite proves the **matcher** works — not
 that the **fingerprints are right**. Only real APKs answer that, and the answer
 is a number.
+
+### Measured accuracy
+
+The most recent figures come from a sweep of **141 third-party packages pulled
+from one Android 13 device** — banking, messaging, social, vendor system apps —
+with every verdict checked by hand against evidence frider is not allowed to
+use: the class references inside `classes*.dex`, plus the `lib/` layout.
+
+| signal | result |
+|---|---|
+| framework verdict | **140 / 141** confirmed |
+| framework, remaining miss | 1 app embedding React Native behind packed `.so` blobs (see *Known limits*) |
+| `kotlin` flag | **123 / 132** (93.2%) on apps with readable dex — 8 false negatives, 1 false positive |
+| `kotlin`, before the multi-marker rule | 56 / 132 (42.4%) |
+
+Nine apps are excluded from the `kotlin` figure because a packer encrypts their
+dex, leaving no independent evidence to compare against; their framework
+verdicts are still confirmed, since packers leave `lib/` intact.
+
+Two rule changes came out of that sweep: the Kotlin marker list (a
+`.kotlin_module`-only rule missed every minified app) and the Lynx fingerprint
+(one app in the set ships `liblynx.so` and had been reading `native`).
+
+Cross-checking a sub-signal like `kotlin` needs the dex, so `corpus_check.py`
+cannot do it — that harness scores `framework` only. Verify sub-signals with a
+throwaway script that reads dex bytes directly, and keep it out of the package.
 
 ### Start with real APKs you can fetch
 
@@ -498,7 +559,9 @@ the threat model and reporting process are in [SECURITY.md](SECURITY.md).
 ## Roadmap
 
 - [x] a harness for validating against real APK sets — `tools/corpus_check.py`
-- [ ] a published accuracy figure from running it over a labelled corpus
+- [x] a published accuracy figure — see [Measured accuracy](#measured-accuracy),
+      from a 141-package device sweep verified against dex contents
+- [ ] the same figure from a labelled, redistributable corpus that CI can rerun
 - [ ] framework **version** extraction (Flutter engine, Hermes, RN) — deliberately
       not in v1: it needs per-framework verification before shipping numbers
 - [ ] optional YARA-rule backend (`yara-python`) so rules can be shared as `.yar`

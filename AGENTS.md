@@ -67,6 +67,27 @@ direction: no framework rule may fire on a real native app. Everything
 reachable that way is native, so it proves nothing about a Flutter or React
 Native marker — those still need apps added by hand.
 
+### Verifying against a device sweep
+
+`corpus_check.py` scores `framework` and nothing else, so it cannot confirm a
+sub-signal like `kotlin`. Verify those against the **dex**: a throwaway script
+that opens each `classes*.dex` and looks for type descriptors the framework or
+language leaves behind is evidence frider is not allowed to use, which is
+exactly what makes it independent. Keep such a script out of the package.
+
+Two traps that will otherwise produce confident nonsense, both hit in practice:
+
+- **Absence in the dex is not absence in the app.** R8 renames
+  `kotlin.jvm.internal.Intrinsics` and strips `kotlin.Metadata`, and a dex
+  packer (SecNeo DexShield, SecIron AppGuard) encrypts the real dex entirely,
+  leaving a stub. Probing for only those two names scored a set of plainly
+  Kotlin apps as Kotlin-free. Probe several strings, and exclude packed apps
+  from the comparison instead of counting them as negatives.
+- **Presence in the dex is not use.** A single vestigial
+  `Lio/flutter/.../FlutterRenderer;` reference, with no `libflutter.so` and no
+  `flutter_assets/`, is a dependency leftover — `native` is the right verdict,
+  and the sweep must not be "corrected" toward the dex.
+
 ## Rules are data
 
 Prefer adding a fingerprint to `rules.json` over adding Python.
@@ -89,7 +110,7 @@ Android never loads; it only means something if an engine is present to run it.
 Give such frameworks a `requires` list (the runtime `.so` markers) and keep the
 asset marker in `markers` — the framework is then claimed only when a `requires`
 marker also matches, and the asset corroborates. Without this, a Flutter app
-shipping a vestigial RN bundle was reported hybrid (real case, VCB Digibank).
+shipping a vestigial RN bundle was reported hybrid (real case, a banking app).
 A new asset-only marker without `requires` is provisional the same way an
 unanchored one is.
 
@@ -163,3 +184,14 @@ required status checks or every PR blocks forever.
 APKs or any corpus of them (licensing, and they are large), `dist/`, `build/`,
 or anything under a corpus directory. `tools/` and `tests/` stay out of the
 built wheel — keep it that way.
+
+**Nor the identity of a scanned banking app.** This repository is public, and a
+package name paired with a framework, packer, or RASP vendor is a target list
+tied to a named financial institution. Findings from such an app go in
+generically — "a shipping banking app", "a minified Kotlin app" — with no
+package name, app name, or bank name, in code, tests, docs, CHANGELOG, commit
+messages, PRs, or issues. Per-app detail belongs in the private
+anti-tamper-probe repo, and sweep tables go to the maintainer directly. Naming
+an ordinary consumer app (a social or messaging app, a vendor system app) as
+the worked example for a rule is fine. Aggregate counts — "1 of 141 packages"
+— are fine.
