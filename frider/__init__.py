@@ -1,8 +1,10 @@
 """frider — Android app framework detector.
 
-Classifies the UI framework of an Android app from its APK contents:
-Flutter / Dart, React Native (Hermes or JavaScriptCore engine), Cordova,
-Ionic, Capacitor, Kony, Xamarin, Unity, or native Java/Kotlin.
+Classifies the UI framework of an Android app from its APK entry names:
+Flutter / Dart, React Native (reporting the Hermes vs JavaScriptCore engine
+split most detectors collapse), Apache Cordova, Capacitor, Ionic, Kony,
+Xamarin, Unity, or native Java/Kotlin.
+
 Zero runtime dependencies (stdlib only).
 """
 

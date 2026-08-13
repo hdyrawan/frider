@@ -1,10 +1,21 @@
-"""Terminal UI helpers: color, verdict styling, summaries, progress."""
+"""Terminal UI helpers: banner, color, verdict styling, summaries, progress."""
 
 from __future__ import annotations
 
 import os
 import sys
 from typing import Optional
+
+# Figlet "Doom". Raw string: the art is full of backslashes that would
+# otherwise read as escape sequences.
+BANNER = r"""
+ ______        _      _
+|  ___|      (_)    | |
+| |_    _ __  _   __| |  ___  _ __
+|  _|  | '__|| | / _` | / _ \| '__|
+| |    | |   | || (_| ||  __/| |
+\_|    |_|   |_| \__,_| \___||_|
+"""
 
 _NO_COLOR_ENV = os.environ.get("NO_COLOR") is not None
 
