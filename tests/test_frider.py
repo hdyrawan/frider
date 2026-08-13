@@ -752,11 +752,27 @@ def test_banner_is_red_f_and_blue_rider():
         assert line == f"\x1b[31m{f_part}\x1b[0m\x1b[34m{plain[len(f_part):]}\x1b[0m"
 
 
-def test_banner_colour_is_dropped_when_asked(monkeypatch):
-    """--no-color and NO_COLOR must reach the banner too, not just the table."""
+def test_banner_colour_is_dropped_when_asked():
+    """--no-color reaches the banner too, not just the table."""
     from frider.ui import Palette, render_banner
 
     assert "\x1b[" not in render_banner(Palette(enabled=False))
+
+
+def test_no_color_env_beats_a_tty(monkeypatch):
+    """https://no-color.org: NO_COLOR wins over an interactive terminal. The
+    banner is the loudest colour frider emits, and it honours it."""
+    from frider import ui
+
+    class Tty:
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(ui, "_NO_COLOR_ENV", True)
+    assert ui.Palette(stream=Tty()).enabled is False
+    assert "\x1b[" not in ui.render_banner(ui.Palette(stream=Tty()))
+    # ...and an explicit enabled=True is still an override, not a suggestion.
+    assert ui.Palette(enabled=True, stream=Tty()).enabled is True
 
 
 def test_banner_colour_follows_stderr_not_stdout():
