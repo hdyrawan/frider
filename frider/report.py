@@ -10,8 +10,12 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
+from . import __version__
 from .rules import Result
 from .ui import Palette, style_verdict
+
+# Bumped whenever a --json field changes meaning or is removed.
+SCHEMA_VERSION = 1
 
 
 def _oneline(text: str) -> str:
@@ -96,12 +100,22 @@ def render_table(results: List[Result], palette: Optional[Palette] = None) -> st
 
 
 def render_json(results: List[Result]) -> str:
-    payload = []
-    for r in results:
-        payload.append(
+    """Machine output, wrapped in a versioned envelope.
+
+    ``schema_version`` is the contract: it is bumped whenever a field changes
+    meaning or disappears, so a caller can refuse input it does not understand
+    instead of silently misreading it.
+    """
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "tool": "frider",
+        "tool_version": __version__,
+        "results": [
             {
                 "source": r.source,
                 "verdict": r.verdict,
+                "framework": r.framework,
+                "frameworks": r.frameworks,
                 "confidence": r.confidence,
                 "engines": r.engines,
                 "kotlin": r.kotlin,
@@ -110,5 +124,7 @@ def render_json(results: List[Result]) -> str:
                 "matched_files": r.markers,
                 "errors": r.errors,
             }
-        )
+            for r in results
+        ],
+    }
     return json.dumps(payload, indent=2)

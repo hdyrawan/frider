@@ -618,7 +618,8 @@ def test_json_keeps_the_full_multiline_message():
 
     r = Result(source="com.demo.rn", verdict="ERROR", confidence="-")
     r.errors.append("line one\nline two")
-    assert json.loads(render_json([r]))[0]["errors"] == ["line one\nline two"]
+    payload = json.loads(render_json([r]))
+    assert payload["results"][0]["errors"] == ["line one\nline two"]
 
 
 def test_adb_error_has_no_trailing_newline_when_stderr_is_empty(monkeypatch):
@@ -647,3 +648,96 @@ def test_version_is_declared_in_exactly_one_place():
     assert not re.search(r'^version = "', pyproject, re.M), \
         "pyproject hardcodes a version again"
     assert re.fullmatch(r"\d+\.\d+\.\d+", frider.__version__)
+
+
+# ---- machine contract: schema envelope and framework ids ----
+
+def test_json_envelope_carries_a_schema_version():
+    """The envelope is the contract: a caller can refuse input it does not
+    understand instead of silently misreading a changed field."""
+    import json
+
+    import frider
+    from frider.report import SCHEMA_VERSION, render_json
+    from frider.rules import Result
+
+    payload = json.loads(render_json([Result(source="a", verdict="X", confidence="High")]))
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["tool"] == "frider"
+    assert payload["tool_version"] == frider.__version__
+    assert isinstance(payload["results"], list)
+
+
+@pytest.mark.parametrize("members,framework,frameworks", [
+    ({"lib/arm64-v8a/libflutter.so": b"e"}, "flutter", ["flutter"]),
+    ({"assets/index.android.bundle": b"j"}, "react-native", ["react-native"]),
+    ({"lib/arm64-v8a/libunity.so": b"u"}, "unity", ["unity"]),
+    ({"classes.dex": b"d"}, "native", []),
+    ({"lib/arm64-v8a/libflutter.so": b"e", "assets/index.android.bundle": b"j"},
+     "hybrid", ["flutter", "react-native"]),
+])
+def test_framework_id_is_stable_and_machine_readable(tmp_path, members, framework, frameworks):
+    """Callers must branch on an id, not regex the prose verdict."""
+    r = classify(str(make_apk(tmp_path / "a.apk", members)))
+    assert r.framework == framework
+    assert r.frameworks == frameworks
+
+
+def test_error_results_are_not_reported_as_native(tmp_path):
+    """Regression: Result defaults framework to 'native', so an unreadable
+    source would have claimed to be an app with no framework markers."""
+    import json
+    import subprocess
+    import sys
+
+    r = subprocess.run(
+        [sys.executable, "-m", "frider", "--json", str(tmp_path / "missing.apk")],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 1
+    entry = json.loads(r.stdout)["results"][0]
+    assert entry["framework"] == "error"
+    assert entry["verdict"] == "ERROR"
+
+
+# ---- confidence means "how sure", not "which answer" ----
+
+def test_native_over_a_complete_apk_is_high_confidence(tmp_path):
+    """Regression: every native verdict read Low, so the most common result in
+    any real scan looked like the least trustworthy one."""
+    apk = make_apk(tmp_path / "native.apk", {
+        "AndroidManifest.xml": b"<m/>",
+        "classes.dex": b"d",
+        "resources.arsc": b"a",
+    })
+    r = classify(str(apk))
+    assert r.verdict == "Native (no framework markers)"
+    assert r.confidence == "High"
+
+
+def test_low_confidence_means_we_could_not_tell(tmp_path):
+    """A fragment with no manifest or dex is not evidence of a native app."""
+    apk = make_apk(tmp_path / "fragment.apk", {"res/drawable/icon.png": b"x"})
+    r = classify(str(apk))
+    assert r.verdict == "Native (no framework markers)"
+    assert r.confidence == "Low"
+
+
+def test_resource_only_split_alone_is_low_confidence(tmp_path):
+    """A split with a manifest but no code cannot settle the question."""
+    apk = make_apk(tmp_path / "split_config.xxhdpi.apk", {
+        "AndroidManifest.xml": b"<m/>",
+        "res/drawable-xxhdpi/i.png": b"x",
+    })
+    assert classify(str(apk)).confidence == "Low"
+
+
+def test_framework_confidence_still_counts_only_the_winner(tmp_path):
+    apk = make_apk(tmp_path / "mixed.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d",
+        "lib/arm64-v8a/libkony.so": b"k",
+        "assets/www/index.html": b"<html/>",
+    })
+    r = classify(str(apk))
+    assert r.framework == "kony"
+    assert r.confidence == "Medium"

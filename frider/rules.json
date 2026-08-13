@@ -1,4 +1,8 @@
 {
+  "apk_structure": {
+    "manifest": "(^|/)AndroidManifest\\.xml$",
+    "code": "(^|/)classes[0-9]*\\.dex$"
+  },
   "kotlin": {
     "marker": "META-INF/.*\\.kotlin_module"
   },
