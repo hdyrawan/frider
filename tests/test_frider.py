@@ -857,3 +857,62 @@ def test_plain_kotlin_app_is_not_mistaken_for_a_cross_platform_framework(tmp_pat
     })))
     assert r.framework == "native"
     assert r.kotlin is True
+
+
+# ---- marker matching is anchored and boundary-aware ----
+
+def test_bang_in_an_entry_name_does_not_truncate_the_evidence(tmp_path):
+    """Regression: '!' marks a container boundary in the display path but is a
+    legal zip entry-name character, so splitting on it truncated real names —
+    mis-citing the evidence and matching markers that were never there."""
+    apk = make_apk(tmp_path / "bang.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d",
+        "assets/we!rd/lib/arm64-v8a/libflutter.so": b"e",
+    })
+    entries = entries_for(str(apk))
+    target = next(e for e in entries if "we!rd" in e.path)
+    assert target.match_path() == "assets/we!rd/lib/arm64-v8a/libflutter.so", \
+        "the boundary was parsed back out of a path that legitimately contains '!'"
+
+
+def test_container_boundary_still_yields_the_inner_path(tmp_path):
+    """The nested case must keep working: inner paths drive matching, so an
+    anchored marker fires on an APK inside an XAPK."""
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as z:
+        z.writestr("AndroidManifest.xml", b"<m/>")
+        z.writestr("classes.dex", b"d")
+        z.writestr("lib/arm64-v8a/libflutter.so", b"e")
+    apk = make_apk(tmp_path / "c.xapk", {"app.apk": inner.getvalue()})
+
+    entries = entries_for(str(apk))
+    nested = next(e for e in entries if e.path.endswith("!lib/arm64-v8a/libflutter.so"))
+    assert nested.match_path() == "lib/arm64-v8a/libflutter.so"
+    assert classify_entries(entries, RULES).framework == "flutter"
+
+
+@pytest.mark.parametrize("entry", [
+    "assets/backup/lib/arm64-v8a/libflutter.so",     # a bundled copy, never loaded
+    "assets/apks/lib/arm64-v8a/libflutter.so.bak",   # renamed
+    "assets/bundle!lib/arm64-v8a/libflutter.so.txt",  # renamed, and bang-bearing
+    "META-INF/lib/arm64-v8a/libflutter.so",          # not where Android looks
+])
+def test_a_library_path_that_is_not_at_the_apk_root_is_not_a_marker(tmp_path, entry):
+    """Regression: markers were unanchored substring searches, so any nested or
+    renamed copy of a library name matched. Android only loads lib/<abi>/*.so at
+    the archive root; anything else is a payload, not a framework."""
+    apk = make_apk(tmp_path / "bundled.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
+        entry: b"not a loaded library",
+    })
+    r = classify(str(apk))
+    assert r.framework == "native", f"{entry} was treated as a Flutter marker"
+    assert r.markers == {}
+
+
+def test_every_marker_is_anchored():
+    """A future unanchored marker reopens the whole class of bug."""
+    from frider.rules import iter_patterns
+
+    unanchored = [p for p in iter_patterns(RULES) if not p.startswith("^")]
+    assert not unanchored, f"unanchored markers: {unanchored}"
