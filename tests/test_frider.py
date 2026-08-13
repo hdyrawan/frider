@@ -491,3 +491,104 @@ def test_package_list_parsing_tolerates_crlf(fake_adb):
 
     fake_adb["splits"] = ["/data/app/base.apk", "/data/app/split.apk"]
     assert apk_paths("SERIAL", "com.example") == ["/data/app/base.apk", "/data/app/split.apk"]
+
+
+# ---- banner ----
+
+def test_banner_art_is_intact():
+    """The art is whitespace-significant: every line must keep its exact
+    leading columns, so nothing may strip or reflow it."""
+    from frider.ui import BANNER
+
+    lines = BANNER.strip("\n").split("\n")
+    assert len(lines) == 6
+    assert lines[0].startswith(" ______")
+    assert [l[0] for l in lines] == [" ", "|", "|", "|", "|", "\\"]
+    assert "\\___||_|" in lines[5]
+
+
+def test_help_renders_the_banner_unreflowed():
+    """Regression: argparse's default formatter collapses whitespace, which
+    turns the banner into a paragraph of punctuation."""
+    import subprocess
+    import sys
+
+    from frider.ui import BANNER
+
+    r = subprocess.run([sys.executable, "-m", "frider", "--help"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0
+    for line in BANNER.strip("\n").split("\n"):
+        assert line in r.stdout, f"banner line lost or reflowed: {line!r}"
+
+
+def test_banner_stays_out_of_normal_and_json_output(flutter_apk):
+    """The banner belongs in --help, never in output that gets piped."""
+    import subprocess
+    import sys
+
+    for extra in ([], ["--json"]):
+        r = subprocess.run(
+            [sys.executable, "-m", "frider", str(flutter_apk), "--no-color"] + extra,
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 0
+        assert "\\_|" not in r.stdout
+        assert "_ __" not in r.stdout
+
+
+def test_readme_banner_matches_the_code():
+    """The README copy and frider.ui.BANNER must not drift apart."""
+    import pathlib
+
+    from frider.ui import BANNER
+
+    readme = pathlib.Path(__file__).resolve().parent.parent / "README.md"
+    assert BANNER.strip("\n") in readme.read_text(encoding="utf-8")
+
+
+# ---- description consistency ----
+
+DESCRIBED_ELSEWHERE = [
+    "Flutter", "React Native", "Hermes", "JavaScriptCore",
+    "Cordova", "Capacitor", "Ionic", "Kony", "Xamarin", "Unity",
+]
+
+
+def _all_descriptions():
+    """The four places frider describes itself, which used to disagree."""
+    import pathlib
+
+    import frider
+    from frider.cli import build_parser
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pyproject = root / "pyproject.toml"
+    readme = root / "README.md"
+
+    summary = re.search(r'^description = "(.*)"$',
+                        pyproject.read_text(encoding="utf-8"), re.M).group(1)
+    # README's opening paragraph, before the first '## ' heading
+    intro = readme.read_text(encoding="utf-8").split("\n## ")[0]
+
+    return {
+        "pyproject.toml": summary,
+        "frider/__init__.py": frider.__doc__,
+        "frider --help": build_parser().description,
+        "README.md": intro,
+    }
+
+
+@pytest.mark.parametrize("source", list(_all_descriptions()))
+def test_every_description_names_every_framework(source):
+    """Regression: the four descriptions drifted — --help omitted the Hermes vs
+    JavaScriptCore split entirely, which is the distinction the tool exists to
+    make, and one said 'Cordova' where the others said 'Apache Cordova'."""
+    text = _all_descriptions()[source]
+    missing = [t for t in DESCRIBED_ELSEWHERE if t.lower() not in text.lower()]
+    assert not missing, f"{source} does not mention: {', '.join(missing)}"
+
+
+def test_descriptions_agree_on_apache_cordova():
+    for source, text in _all_descriptions().items():
+        assert "Apache Cordova" in text or "Apache\nCordova" in text, source
