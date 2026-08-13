@@ -15,6 +15,10 @@
         "^lib/[^/]+/libflutter\\.so$",
         "^assets/flutter_assets/",
         "^lib/[^/]+/libapp\\.so$"
+      ],
+      "requires": [
+        "^lib/[^/]+/libflutter\\.so$",
+        "^lib/[^/]+/libapp\\.so$"
       ]
     },
     {
@@ -23,6 +27,12 @@
       "weight": 100,
       "markers": [
         "^assets/index\\.android\\.bundle$",
+        "^lib/[^/]+/libreactnative[^/]*\\.so$",
+        "^lib/[^/]+/libhermes[^/]*\\.so$",
+        "^lib/[^/]+/libjsc\\.so$",
+        "^lib/[^/]+/libjsi\\.so$"
+      ],
+      "requires": [
         "^lib/[^/]+/libreactnative[^/]*\\.so$",
         "^lib/[^/]+/libhermes[^/]*\\.so$",
         "^lib/[^/]+/libjsc\\.so$",
