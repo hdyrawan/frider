@@ -192,3 +192,75 @@ def test_real_corpus_meets_the_accuracy_floor():
     buf = io.StringIO()
     accuracy = corpus_check.report(cases, stream=buf)
     assert accuracy >= floor, "\n" + buf.getvalue()
+
+
+# ---- the real-APK fetcher ----
+
+_fetch_spec = importlib.util.spec_from_file_location(
+    "fetch_sample_corpus", ROOT / "tools" / "fetch_sample_corpus.py")
+fetch_sample_corpus = importlib.util.module_from_spec(_fetch_spec)
+_fetch_spec.loader.exec_module(fetch_sample_corpus)
+
+
+def test_every_declared_source_uses_a_label_the_checker_accepts():
+    """A typo'd label would make corpus_check reject the whole fetched tree."""
+    from frider.rules import load_rules
+
+    labels = set(corpus_check.known_labels(load_rules()))
+    for src in fetch_sample_corpus.SOURCES:
+        assert src.label in labels, f"{src.package} declares unknown label {src.label!r}"
+        assert src.registry in ("pypi", "npm"), src.registry
+
+
+def test_extract_apks_pulls_only_apks_and_namespaces_them(tmp_path):
+    """Archives carry plenty of other files, and two packages can ship an APK
+    of the same basename — the package prefix keeps them apart."""
+    import tarfile
+
+    archive = tmp_path / "pkg.tgz"
+    with tarfile.open(archive, "w:gz") as tar:
+        for name, body in [("pkg/app-debug.apk", b"APK"),
+                           ("pkg/README.md", b"docs"),
+                           ("pkg/nested/other.apk", b"APK2")]:
+            data = io.BytesIO(body)
+            info = tarfile.TarInfo(name)
+            info.size = len(body)
+            tar.addfile(info, data)
+
+    dest = tmp_path / "out"
+    dest.mkdir()
+    src = fetch_sample_corpus.Source("npm", "demo-pkg", "native", "")
+    written = sorted(fetch_sample_corpus.extract_apks(archive.read_bytes(), src, str(dest)))
+
+    assert written == ["demo-pkg__app-debug.apk", "demo-pkg__other.apk"]
+    assert not (dest / "README.md").exists()
+    assert (dest / "demo-pkg__app-debug.apk").read_bytes() == b"APK"
+
+
+def test_fetcher_reports_failure_rather_than_an_empty_corpus(tmp_path, monkeypatch, capsys):
+    """Offline, this must fail loudly — an empty corpus that exits 0 would look
+    like a passing real-APK check while measuring nothing."""
+    def boom(url):
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr(fetch_sample_corpus, "_get", boom)
+    assert fetch_sample_corpus.main([str(tmp_path / "corpus")]) == 1
+    assert "no APKs fetched" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not os.environ.get("FRIDER_FETCH_CORPUS"),
+                    reason="set FRIDER_FETCH_CORPUS=1 to download real APKs from PyPI and npm")
+def test_real_native_apks_do_not_trip_any_framework_rule(tmp_path):
+    """The live check: real Android builds, thousands of real entry names, and
+    no framework marker may fire on any of them."""
+    from frider.rules import load_rules
+
+    corpus = tmp_path / "corpus"
+    assert fetch_sample_corpus.main([str(corpus)]) == 0
+
+    cases = corpus_check.run(str(corpus), load_rules())
+    assert cases, "fetcher produced no APKs"
+
+    buf = io.StringIO()
+    accuracy = corpus_check.report(cases, stream=buf)
+    assert accuracy == 100.0, "\n" + buf.getvalue()

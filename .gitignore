@@ -5,3 +5,9 @@ dist/
 build/
 .venv/
 .pytest_cache/
+
+# fetched corpora — real APKs are large and not ours to redistribute
+corpus/
+*.apk
+*.xapk
+*.apks
