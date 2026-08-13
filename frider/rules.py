@@ -41,6 +41,11 @@ class Result:
     source: str
     verdict: str
     confidence: str
+    # ``verdict`` is prose for humans and may be reworded; ``framework`` is the
+    # stable machine id callers should branch on ("flutter", "react-native",
+    # "native", "hybrid"). ``frameworks`` lists every id the verdict covers.
+    framework: str = "native"
+    frameworks: List[str] = field(default_factory=list)
     engines: List[str] = field(default_factory=list)
     kotlin: bool = False
     embedded_js: List[str] = field(default_factory=list)
@@ -52,6 +57,7 @@ class Result:
 def iter_patterns(rules: Dict) -> List[str]:
     """Every regex the rule set contains, in a stable order."""
     out: List[str] = []
+    out.extend(rules.get("apk_structure", {}).values())
     for fw in rules.get("frameworks", []):
         out.extend(fw.get("markers", []))
         out.extend(fw.get("engines", {}).values())
@@ -137,11 +143,19 @@ def classify_entries(entries: List[Entry], rules: Dict) -> Result:
         item["label"] for item in rules.get("notable_libs", []) if find(item["regex"])
     ]
 
-    verdict = derive_verdict(hits, engines)
+    # A verdict of "native" is only trustworthy if we actually saw an APK: a
+    # manifest plus dex. Otherwise we were handed a fragment or a resource-only
+    # split, and "no framework markers" means we could not tell.
+    structure = rules.get("apk_structure", {})
+    looks_like_an_apk = bool(structure) and all(find(p) for p in structure.values())
+
+    won = winning_ids(hits)
     result = Result(
         source="",
-        verdict=verdict,
-        confidence=derive_confidence(hits, verdict),
+        verdict=derive_verdict(hits, engines),
+        confidence=derive_confidence(hits, looks_like_an_apk),
+        framework=won[0] if len(won) == 1 else ("hybrid" if won else "native"),
+        frameworks=won,
         engines=engines,
         kotlin=kotlin,
         embedded_js=embedded_js,
@@ -181,18 +195,23 @@ def derive_verdict(hits: Dict[str, FrameworkHit], engines: List[str]) -> str:
     return "Native (no framework markers)"
 
 
-def derive_confidence(hits: Dict[str, FrameworkHit], verdict: str = "") -> str:
+def derive_confidence(hits: Dict[str, FrameworkHit], looks_like_an_apk: bool = False) -> str:
     """How much evidence backs *the reported verdict*.
 
-    Counted over the winning framework only — summing every framework's
-    markers let an unrelated weak hit inflate the score, so a one-marker
-    verdict could read "High" on the strength of a different framework's
-    evidence.
+    ``Low`` means "could not tell", never "the answer was native". A native
+    verdict over a complete APK is a confident call — absence of every marker
+    across a fully read package is real evidence — so it reports High. Low is
+    reserved for input too thin to distinguish a native app from a fragment we
+    could barely read.
+
+    For a framework verdict the count covers the winning framework only:
+    summing every framework's markers let an unrelated weak hit inflate the
+    score, so a one-marker verdict could read High on someone else's evidence.
     """
     won = winning_ids(hits)
+    if not won:
+        return "High" if looks_like_an_apk else "Low"
     total = sum(len(hits[i].paths) for i in won)
     if total >= 2:
         return "High"
-    if total == 1:
-        return "Medium"
-    return "Low"
+    return "Medium"
