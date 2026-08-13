@@ -138,11 +138,15 @@ def _list_mode(args, palette) -> int:
         print("frider: --adb needs a serial (pass --serial, or set "
               "ANDROID_PROBE_SERIAL)", file=sys.stderr)
         return 2
+    # Anything that asked for a scan is being dropped here, and dropping it in
+    # silence would read as a listing narrowed to those names, or as a scan
+    # that happened to print a list.
     if args.paths:
-        # Same reasoning as --all: silently dropping the names would look
-        # like a listing filtered to exactly those packages.
-        progress(f"frider: --list shows every package; ignoring the "
+        progress(f"frider: --list lists what is installed; ignoring the "
                  f"{len(args.paths)} name(s) given")
+    if args.all:
+        progress("frider: --list lists without pulling; ignoring --all "
+                 "(drop --list to classify every package)")
     try:
         packages = list_packages(serial, include_system=args.list_all)
     except AdbError as e:
@@ -166,16 +170,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     # contract a caller pipes into jq, and a table someone pipes into awk is
     # just as easily broken by seven lines of ASCII art in front of it.
     print(BANNER.strip("\n"), file=sys.stderr)
+    palette = Palette(enabled=False if args.no_color else None)
+
+    # Before the rules are loaded: a listing classifies nothing, so a broken
+    # --rules file is no reason to refuse to say what is installed.
+    if args.list_packages or args.list_all:
+        return _list_mode(args, palette)
+
     try:
         rules = load_rules(args.rules)
     except (OSError, ValueError, re.error) as e:
         # A bad --rules file is user input, not a crash: report it plainly.
         print(f"frider: cannot load rules: {e}", file=sys.stderr)
         return 2
-    palette = Palette(enabled=False if args.no_color else None)
-
-    if args.list_packages or args.list_all:
-        return _list_mode(args, palette)
 
     results = []
     scratch = None

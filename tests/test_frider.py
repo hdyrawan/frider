@@ -699,6 +699,23 @@ def test_list_says_it_ignored_package_names(fake_pm_list, capsys):
     assert "ignoring the 1 name(s) given" in capsys.readouterr().err
 
 
+def test_list_says_it_ignored_all(fake_pm_list, capsys):
+    """`--list --all` asked for a full scan and gets a listing. Saying nothing
+    would read as a scan that happened to print a package list."""
+    assert main(["--adb", "--serial", "S", "--list", "--all", "--no-color"]) == 0
+    err = capsys.readouterr().err
+    assert "ignoring --all" in err
+    assert not any("pull" in c for c in fake_pm_list["calls"])
+
+
+def test_list_does_not_need_a_rules_file(fake_pm_list, capsys):
+    """A listing classifies nothing, so a broken --rules file is no reason to
+    refuse to say what is installed."""
+    assert main(["--adb", "--serial", "S", "--list", "--rules",
+                 "/nonexistent/rules.json", "--no-color"]) == 0
+    assert "cannot load rules" not in capsys.readouterr().err
+
+
 def test_list_packages_builds_the_right_adb_command(fake_pm_list):
     from frider.adb import list_packages
 
