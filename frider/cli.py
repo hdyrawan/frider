@@ -44,9 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
         description=BANNER.strip("\n") + "\n\n"
                     "Android app framework detector. Classifies Flutter / Dart,\n"
                     "React Native (reporting the Hermes vs JavaScriptCore engine\n"
-                    "split most detectors collapse), Apache Cordova, Capacitor,\n"
-                    "Ionic, Kony, Xamarin, Unity, or native Java/Kotlin — from\n"
-                    "APK entry names alone, never file contents.",
+                    "split most detectors collapse), .NET MAUI, Xamarin, Apache\n"
+                    "Cordova, Capacitor, Ionic, Kony, NativeScript, Qt, Titanium,\n"
+                    "Unity, or native Java/Kotlin — from APK entry names alone,\n"
+                    "never file contents.",
         epilog="A path can be an .apk, an .xapk/.apks container, or a directory\n"
                "of APKs. With --adb, positional arguments are package names.",
     )

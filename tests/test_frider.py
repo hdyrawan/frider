@@ -552,7 +552,8 @@ def test_readme_banner_matches_the_code():
 
 DESCRIBED_ELSEWHERE = [
     "Flutter", "React Native", "Hermes", "JavaScriptCore",
-    "Cordova", "Capacitor", "Ionic", "Kony", "Xamarin", "Unity",
+    "MAUI", "Xamarin", "Cordova", "Capacitor", "Ionic", "Kony",
+    "NativeScript", "Qt", "Titanium", "Unity",
 ]
 
 
@@ -796,3 +797,64 @@ def test_nested_container_spools_every_member_instead_of_buffering(tmp_path, mon
         "a nested member bypassed the spool and was buffered in memory"
     assert any(e.path.endswith("!lib/arm64-v8a/libflutter.so") for e in entries)
     assert classify_entries(entries, RULES).framework == "flutter"
+
+
+# ---- newer framework fingerprints ----
+
+@pytest.mark.parametrize("name,extra,framework", [
+    ("maui", {"assemblies/Microsoft.Maui.Controls.dll": b"d",
+              "assemblies/Microsoft.Maui.dll": b"d",
+              "lib/arm64-v8a/libmonodroid.so": b"m"}, "maui"),
+    ("xamarin-forms", {"assemblies/Xamarin.Forms.Core.dll": b"d",
+                       "assemblies/mscorlib.dll": b"d",
+                       "lib/arm64-v8a/libmonodroid.so": b"m"}, "xamarin"),
+    ("nativescript", {"lib/arm64-v8a/libNativeScript.so": b"n",
+                      "assets/metadata/treeNodeStream.dat": b"m"}, "nativescript"),
+    ("qt", {"lib/arm64-v8a/libQt6Core_arm64-v8a.so": b"q",
+            "lib/arm64-v8a/libplugins_platforms_qtforandroid_arm64-v8a.so": b"q"}, "qt"),
+    ("titanium", {"lib/arm64-v8a/libtitanium.so": b"t",
+                  "assets/Resources/app.js": b"j"}, "titanium"),
+])
+def test_newer_frameworks_are_identified(tmp_path, name, extra, framework):
+    base = {"AndroidManifest.xml": b"<m/>", "classes.dex": b"d"}
+    r = classify(str(make_apk(tmp_path / f"{name}.apk", {**base, **extra})))
+    assert r.framework == framework
+
+
+def test_maui_outranks_xamarin_when_both_match(tmp_path):
+    """A MAUI app also ships libmonodroid.so, so both rules fire. The more
+    specific one has to win, or MAUI would never be reported."""
+    r = classify(str(make_apk(tmp_path / "maui.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d",
+        "assemblies/Microsoft.Maui.dll": b"d",
+        "lib/arm64-v8a/libmonodroid.so": b"m",
+    })))
+    assert r.framework == "maui"
+    assert "xamarin" in r.markers, "the xamarin evidence should still be recorded"
+
+
+def test_assembly_store_build_reports_dotnet_not_a_guess(tmp_path):
+    """Release .NET builds pack assemblies into a blob, so the DLL names are
+    not visible as entries. Reporting xamarin is correct; guessing maui is not."""
+    r = classify(str(make_apk(tmp_path / "blob.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d",
+        "assemblies/assemblies.blob": b"b",
+        "assemblies/assemblies.manifest": b"m",
+        "lib/arm64-v8a/libmonodroid.so": b"m",
+        "lib/arm64-v8a/libmono-android.release.so": b"r",
+    })))
+    assert r.framework == "xamarin"
+    assert r.confidence == "High"
+
+
+def test_plain_kotlin_app_is_not_mistaken_for_a_cross_platform_framework(tmp_path):
+    """Kotlin/Compose Multiplatform deliberately have no rules — they compile to
+    ordinary Android code, so any marker broad enough to catch them would fire
+    on plain Kotlin apps like this one."""
+    r = classify(str(make_apk(tmp_path / "kotlin.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d",
+        "META-INF/app_release.kotlin_module": b"k",
+        "META-INF/androidx.compose.ui_ui.version": b"1",
+    })))
+    assert r.framework == "native"
+    assert r.kotlin is True

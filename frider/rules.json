@@ -71,13 +71,53 @@
       ]
     },
     {
+      "id": "maui",
+      "name": ".NET MAUI",
+      "weight": 110,
+      "markers": [
+        "assemblies/(.*/)?Microsoft\\.Maui[^/]*\\.dll",
+        "lib/[^/]+/lib(Microsoft\\.)?Maui[^/]*\\.so"
+      ]
+    },
+    {
       "id": "xamarin",
       "name": "Xamarin / .NET",
       "weight": 100,
       "markers": [
         "lib/[^/]+/libmonodroid\\.so",
         "lib/[^/]+/libxamarin[^/]*\\.so",
+        "lib/[^/]+/libmono-android\\.[^/]*\\.so",
+        "assemblies/assemblies[^/]*\\.blob",
         "assemblies/.*\\.dll"
+      ]
+    },
+    {
+      "id": "nativescript",
+      "name": "NativeScript",
+      "weight": 90,
+      "markers": [
+        "lib/[^/]+/libNativeScript\\.so",
+        "assets/metadata/treeNodeStream\\.dat",
+        "assets/app/vendor\\.js"
+      ]
+    },
+    {
+      "id": "qt",
+      "name": "Qt for Android",
+      "weight": 90,
+      "markers": [
+        "lib/[^/]+/libQt[56][^/]*Core[^/]*\\.so",
+        "lib/[^/]+/libplugins_platforms_qtforandroid[^/]*\\.so",
+        "assets/android_rcc_bundle\\.rcc"
+      ]
+    },
+    {
+      "id": "titanium",
+      "name": "Titanium (Appcelerator)",
+      "weight": 85,
+      "markers": [
+        "lib/[^/]+/libtitanium\\.so",
+        "assets/Resources/app\\.js"
       ]
     },
     {
