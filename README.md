@@ -337,24 +337,36 @@ traceback, so a batch over a hundred APKs always finishes and always reports.
 ```json
 {
   "apk_structure": {
-    "manifest": "(^|/)AndroidManifest\\.xml$",
-    "code": "(^|/)classes[0-9]*\\.dex$"
+    "manifest": "^AndroidManifest\\.xml$",
+    "code": "^classes[0-9]*\\.dex$"
   },
-  "kotlin": { "marker": "META-INF/.*\\.kotlin_module" },
+  "kotlin": { "marker": "^META-INF/.*\\.kotlin_module$" },
   "frameworks": [
     {
       "id": "react-native",
       "name": "React Native",
       "weight": 100,
-      "markers": ["assets/index\\.android\\.bundle", "lib/[^/]+/libreactnative[^/]*\\.so"],
+      "markers": [
+        "^assets/index\\.android\\.bundle$",
+        "^lib/[^/]+/libreactnative[^/]*\\.so$",
+        "^lib/[^/]+/libhermes[^/]*\\.so$",
+        "^lib/[^/]+/libjsc\\.so$",
+        "^lib/[^/]+/libjsi\\.so$"
+      ],
+      "requires": [
+        "^lib/[^/]+/libreactnative[^/]*\\.so$",
+        "^lib/[^/]+/libhermes[^/]*\\.so$",
+        "^lib/[^/]+/libjsc\\.so$",
+        "^lib/[^/]+/libjsi\\.so$"
+      ],
       "engines": {
-        "hermes": "lib/[^/]+/libhermes[^/]*\\.so",
-        "jsc": "lib/[^/]+/libjsc\\.so|lib/[^/]+/libjscexecutor\\.so"
+        "hermes": "^lib/[^/]+/libhermes[^/]*\\.so$",
+        "jsc": "^(?:lib/[^/]+/libjsc\\.so|lib/[^/]+/libjscexecutor\\.so)$"
       }
     }
   ],
-  "embedded_js": [ { "id": "duktape", "name": "Duktape (embedded JS)", "marker": "lib/[^/]+/libduktape\\.so" } ],
-  "notable_libs": [ { "regex": "lib/[^/]+/libtoolChecker\\.so", "label": "RootBeer (root checker)" } ]
+  "embedded_js": [ { "id": "duktape", "name": "Duktape (embedded JS)", "marker": "^lib/[^/]+/libduktape\\.so$" } ],
+  "notable_libs": [ { "regex": "^lib/[^/]+/libtoolChecker\\.so$", "label": "RootBeer (root checker)" } ]
 }
 ```
 
@@ -364,6 +376,17 @@ a substring search. Android only loads `lib/<abi>/*.so` from the archive root, s
 a bundled copy under `assets/` or a renamed `.so.bak` is a payload rather than a
 framework, and must not match. A marker ending in `/` is a directory prefix and
 is anchored only at the start.
+
+**`requires` separates runtime from payload.** A framework can declare that at
+least one of its `requires` markers must match before it is claimed; the
+remaining `markers` then corroborate but cannot fire alone. This matters for
+asset markers: a shipped `assets/index.android.bundle` (React Native) or
+`flutter_assets/` dir (Flutter) is only evidence if the APK also contains an
+engine to execute it. Android loads nothing from `assets/`, so a bundle with no
+`libhermes`/`libjsc`/`libreactnative` is a dead copy, not React Native — found
+on a real app (VCB Digibank) that shipped a vestigial RN bundle on a Flutter
+host and was misreported hybrid until `requires` was added. Asset-only markers
+without `requires` risk the same false positive.
 
 Inside a container, rules match the inner APK's own path, so
 `container.xapk!app.apk!lib/...` matches the same rules as a flat APK. A framework wins by marker presence;

@@ -83,6 +83,16 @@ directory prefix). Unanchored markers are substring searches, so a bundled copy
 under `assets/` or a renamed `.so.bak` matched a library Android would never
 load. A test fails if an unanchored marker appears.
 
+**Asset markers must be backed by a runtime lib via `requires`.** A marker
+whose path lives under `assets/` (a JS bundle, an asset directory) is a payload
+Android never loads; it only means something if an engine is present to run it.
+Give such frameworks a `requires` list (the runtime `.so` markers) and keep the
+asset marker in `markers` — the framework is then claimed only when a `requires`
+marker also matches, and the asset corroborates. Without this, a Flutter app
+shipping a vestigial RN bundle was reported hybrid (real case, VCB Digibank).
+A new asset-only marker without `requires` is provisional the same way an
+unanchored one is.
+
 Match on `Entry.match_path()`, never on `innermost(entry.path)`. The `!`
 container boundary is display-only; `!` is legal in a zip entry name, so parsing
 it back out truncates real paths.
