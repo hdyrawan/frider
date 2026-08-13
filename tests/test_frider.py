@@ -671,10 +671,15 @@ def test_json_envelope_carries_a_schema_version():
 
 @pytest.mark.parametrize("members,framework,frameworks", [
     ({"lib/arm64-v8a/libflutter.so": b"e"}, "flutter", ["flutter"]),
-    ({"assets/index.android.bundle": b"j"}, "react-native", ["react-native"]),
+    ({"lib/arm64-v8a/libflutter.so": b"e",
+      "assets/flutter_assets/x.json": b"{}"}, "flutter", ["flutter"]),
+    ({"assets/index.android.bundle": b"j",
+      "lib/arm64-v8a/libhermes.so": b"h"}, "react-native", ["react-native"]),
     ({"lib/arm64-v8a/libunity.so": b"u"}, "unity", ["unity"]),
     ({"classes.dex": b"d"}, "native", []),
-    ({"lib/arm64-v8a/libflutter.so": b"e", "assets/index.android.bundle": b"j"},
+    ({"lib/arm64-v8a/libflutter.so": b"e",
+      "assets/index.android.bundle": b"j",
+      "lib/arm64-v8a/libhermes.so": b"h"},
      "hybrid", ["flutter", "react-native"]),
 ])
 def test_framework_id_is_stable_and_machine_readable(tmp_path, members, framework, frameworks):
@@ -916,6 +921,46 @@ def test_every_marker_is_anchored():
 
     unanchored = [p for p in iter_patterns(RULES) if not p.startswith("^")]
     assert not unanchored, f"unanchored markers: {unanchored}"
+
+
+def test_rn_bundle_without_an_engine_is_not_react_native(tmp_path):
+    """Regression: an `assets/index.android.bundle` that is shipped but never
+    executed must not claim React Native. A real RN app loads the bundle with
+    libhermes/libjsc/libreactnative; a bundle with none of those is a bundled
+    asset (dead copy, leftover, or payload), not a framework. Found on a real
+    Flutter app (a banking app) that shipped a vestigial RN bundle."""
+    apk = make_apk(tmp_path / "bundle-only.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
+        "assets/index.android.bundle": b"not executed",
+    })
+    r = classify(str(apk))
+    assert r.framework == "native", "bundle alone was treated as React Native"
+    assert r.markers == {}
+
+
+def test_flutter_assets_without_an_engine_is_not_flutter(tmp_path):
+    """Regression: flutter_assets/ alone must not claim Flutter. The engine
+    (libflutter.so/libapp.so) is what actually runs a Flutter app; a stray
+    assets dir is a payload."""
+    apk = make_apk(tmp_path / "assets-only.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
+        "assets/flutter_assets/AssetManifest.json": b"{}",
+    })
+    r = classify(str(apk))
+    assert r.framework == "native", "flutter_assets alone was treated as Flutter"
+    assert r.markers == {}
+
+
+def test_rn_bundle_plus_engine_still_detected(tmp_path):
+    """The legit path must keep working: bundle + hermes engine is RN."""
+    apk = make_apk(tmp_path / "rn-ok.apk", {
+        "AndroidManifest.xml": b"<m/>", "classes.dex": b"d", "resources.arsc": b"a",
+        "assets/index.android.bundle": b"js",
+        "lib/arm64-v8a/libhermes.so": b"h",
+    })
+    r = classify(str(apk))
+    assert r.framework == "react-native"
+    assert "hermes" in r.engines
 
 
 # ---- Entry.match_path() carries the inner path; it is required, not derived ----
