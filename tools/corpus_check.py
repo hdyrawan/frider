@@ -16,6 +16,19 @@ an app is a matter of dropping it in the right folder:
       native/             ...          # apps with no cross-platform framework
       _ignore/            ...          # skipped: staging, unlabelled, licence-bound
 
+A split-APK pull goes in its own subdirectory and counts as a single case —
+the same set semantics as ``frider pulled-apks/``, where every ``apk_*.apk``
+is scanned together. A resource-only config split is then not misread as a
+second "native" app:
+
+    corpus/
+      flutter/
+        myapp.apk                       # single-APK case
+        myapp-split/                    # split-APK case, scored once
+          base.apk
+          config.arm64_v8a.apk
+          config.en.apk
+
 Run it:
 
     python3 tools/corpus_check.py corpus/
@@ -80,6 +93,9 @@ def collect(corpus_dir: str, labels: List[str]) -> List[str]:
 
 def classify_one(path: str, rules: Dict, expected: str) -> Case:
     try:
+        # A directory of split APKs is classified as one set, matching the
+        # CLI's directory mode: every apk_*.apk is scanned together, so a
+        # resource-only config split cannot be misread as a "native" app.
         result = classify_entries(entries_for(path), rules)
     except (ValueError, OSError) as exc:
         return Case(path, expected, "error", "-", str(exc))
@@ -91,10 +107,14 @@ def run(corpus_dir: str, rules: Dict) -> List[Case]:
     cases: List[Case] = []
     for label in collect(corpus_dir, labels):
         label_dir = os.path.join(corpus_dir, label)
-        for root, _dirs, files in os.walk(label_dir):
-            for name in sorted(files):
-                if name.lower().endswith(APK_SUFFIXES):
-                    cases.append(classify_one(os.path.join(root, name), rules, label))
+        for entry in sorted(os.listdir(label_dir)):
+            full = os.path.join(label_dir, entry)
+            if os.path.isdir(full):
+                # A subdirectory holds one split-APK pull: one case, scanned
+                # as a set. Do not descend — the files inside belong together.
+                cases.append(classify_one(full, rules, label))
+            elif entry.lower().endswith(APK_SUFFIXES):
+                cases.append(classify_one(full, rules, label))
     return cases
 
 
