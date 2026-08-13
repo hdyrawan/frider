@@ -916,3 +916,34 @@ def test_every_marker_is_anchored():
 
     unanchored = [p for p in iter_patterns(RULES) if not p.startswith("^")]
     assert not unanchored, f"unanchored markers: {unanchored}"
+
+
+# ---- Entry.match_path() carries the inner path; it is required, not derived ----
+
+def test_entry_without_inner_fails_loudly():
+    """Regression: match_path() used to fall back to innermost(path) when
+    inner was missing, and innermost() splits on '!' — legal in zip entry
+    names — so a directly-constructed Entry could silently truncate a path
+    like assets/we!rd/lib/... and match markers that were never there. The
+    inner path is now required: a construction that omits it must fail at
+    construction time, not misclassify at match time."""
+    from frider.apk import Entry
+
+    with pytest.raises(TypeError):
+        Entry("assets/we!rd/lib/arm64-v8a/libflutter.so", False, None)
+
+
+def test_match_path_returns_the_carried_inner_path_not_the_display_path():
+    """The match path is whatever was set at construction — the display path's
+    '!' container boundary is never parsed back out, even when the path really
+    contains '!' as a legal character."""
+    from frider.apk import Entry
+
+    e = Entry("assets/we!rd/lib/arm64-v8a/libflutter.so", False, None,
+              inner="assets/we!rd/lib/arm64-v8a/libflutter.so")
+    assert e.match_path() == "assets/we!rd/lib/arm64-v8a/libflutter.so"
+
+    container = Entry("bundle.xapk!app.apk!lib/arm64-v8a/libflutter.so", False, None,
+                      inner="lib/arm64-v8a/libflutter.so")
+    assert container.match_path() == "lib/arm64-v8a/libflutter.so"
+    assert container.path == "bundle.xapk!app.apk!lib/arm64-v8a/libflutter.so"
