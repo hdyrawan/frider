@@ -110,7 +110,9 @@ def _adb_classify(serial: str, packages: List[str], rules, cache_dir: str):
 def _error_result(source: str, message: str):
     from .rules import Result
 
-    r = Result(source=source, verdict="ERROR", confidence="-")
+    # framework="error", never the "native" default — a source we could not
+    # read must not report as an app with no framework markers.
+    r = Result(source=source, verdict="ERROR", confidence="-", framework="error")
     r.errors.append(message)
     return r
 

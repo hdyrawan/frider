@@ -169,6 +169,54 @@ framework, with a `(+N)` overflow count) — not the rule regexes. Colors are
 enabled automatically when stdout is a TTY; disable with `--no-color` or the
 `NO_COLOR` env var. A one-line tally follows the table.
 
+### Confidence
+
+Confidence describes how sure frider is of **the verdict it reported** — never
+which answer it happened to reach.
+
+| | meaning |
+|---|---|
+| `High` | two or more markers for the winning framework — or, for a native verdict, a complete APK (manifest **and** dex) in which no marker appeared at all |
+| `Medium` | exactly one marker for the winning framework |
+| `Low` | **could not tell.** The input was too thin to settle the question — a fragment, or a resource-only split with no code in it |
+
+`Low` never means "the answer was native". Absence of every marker across a
+package that frider fully read is real evidence, and reports `High`.
+
+### JSON output
+
+`--json` emits a versioned envelope. Branch on **`framework`**, which is a
+stable id (`flutter`, `react-native`, `cordova`, `capacitor`, `ionic`, `kony`,
+`xamarin`, `unity`, plus `native`, `hybrid` and `error`). `verdict` is prose for
+humans and may be reworded between releases; `matched_files` names the real APK
+entries behind the call, so a verdict can be audited rather than trusted.
+
+```json
+{
+  "schema_version": 1,
+  "tool": "frider",
+  "tool_version": "0.2.0",
+  "results": [
+    {
+      "source": "rn.apk",
+      "verdict": "React Native (hermes)",
+      "framework": "react-native",
+      "frameworks": ["react-native"],
+      "confidence": "High",
+      "engines": ["hermes"],
+      "kotlin": false,
+      "embedded_js": [],
+      "notable_libs": [],
+      "matched_files": { "react-native": ["assets/index.android.bundle"] },
+      "errors": []
+    }
+  ]
+}
+```
+
+`schema_version` is bumped whenever a field changes meaning or is removed, so a
+caller can refuse input it does not understand instead of misreading it.
+
 ### Exit codes
 
 `0` — everything classified · `1` — at least one source errored (missing file,
