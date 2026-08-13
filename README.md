@@ -153,17 +153,26 @@ to point elsewhere or `--no-cache` for a throwaway pull.
 ### Example output
 
 ```
-+----------------------+--------------------------+------------+---------------------------------------------+-------------------------------+
-| source               | verdict                  | confidence | markers                                     | notes                         |
-+----------------------+--------------------------+------------+---------------------------------------------+-------------------------------+
-| app.apk              | Flutter / Dart           | High       | flutter:lib/arm64-v8a/libflutter.so (+7)     |                               |
-| rn.apk               | React Native (hermes)    | High       | react-native:lib/arm64-v8a/libhermes.so      | engine=hermes                 |
-| rn-jsc.apk           | React Native (jsc)       | High       | react-native:lib/arm64-v8a/libjsc.so (+1)    | engine=jsc                    |
-| web.apk              | Apache Cordova           | High       | cordova:assets/www/index.html (+2)           |                               |
-| kony.apk             | Kony (Temenos)           | Medium     | kony:lib/arm64-v8a/libkonyjsvm.so            | libs=RootBeer (root checker)  |
-+----------------------+--------------------------+------------+---------------------------------------------+-------------------------------+
-2 source(s): 1 flutter / dart, 1 react native
++------------------------+-------------------------------+------------+-------------------------------------------------------------------------------------+
+| source                 | verdict                       | confidence | markers                                                                             |
++------------------------+-------------------------------+------------+-------------------------------------------------------------------------------------+
+| banking-flutter.apk    | Flutter / Dart                | High       | flutter:lib/arm64-v8a/libflutter.so (+2)                                            |
+| shop-rn-hermes.apk     | React Native (hermes)         | High       | react-native:assets/index.android.bundle (+3)                                       |
+| legacy-rn-jsc.apk      | React Native (jsc)            | High       | react-native:assets/index.android.bundle (+2)                                       |
+| crm-maui.apk           | .NET MAUI                     | High       | maui:assemblies/Microsoft.Maui.dll (+1); xamarin:lib/arm64-v8a/libmonodroid.so (+2) |
+| kiosk-cordova.apk      | Apache Cordova                | High       | cordova:assets/www/index.html (+2); ionic:assets/www/build/vendor/ionic.bundle.js   |
+| field-nativescript.apk | NativeScript                  | High       | nativescript:lib/arm64-v8a/libNativeScript.so (+2)                                  |
+| teller-kony.apk        | Kony (Temenos)                | Medium     | kony:lib/arm64-v8a/libkony.so                                                       |
+| plain-native.apk       | Native (no framework markers) | High       | -                                                                                   |
+| split-fragment.apk     | Native (no framework markers) | Low        | -                                                                                   |
+| truncated.apk          | ERROR                         | -          | -                                                                                   |
++------------------------+-------------------------------+------------+-------------------------------------------------------------------------------------+
+10 source(s): 2 react native, 2 native, 1 flutter / dart, 1 .net maui, 1 apache cordova, 1 nativescript, 1 kony, 1 error(s)
 ```
+
+A `notes` column follows `markers` (elided above for width) carrying the JS
+engine, Kotlin metadata, embedded JS runtimes, notable native libraries and any
+error text.
 
 The **markers** column shows the actual APK entries that matched (up to 8 per
 framework, with a `(+N)` overflow count) — not the rule regexes. Colors are
@@ -247,6 +256,10 @@ unreadable APK, adb pull failure, package not installed) · `2` — usage error
 
 ```json
 {
+  "apk_structure": {
+    "manifest": "(^|/)AndroidManifest\\.xml$",
+    "code": "(^|/)classes[0-9]*\\.dex$"
+  },
   "kotlin": { "marker": "META-INF/.*\\.kotlin_module" },
   "frameworks": [
     {
@@ -268,8 +281,14 @@ unreadable APK, adb pull failure, package not installed) · `2` — usage error
 Markers are regular expressions matched (case-insensitive) against every APK
 entry path; the innermost path is used, so `container.xapk!app.apk!lib/...`
 matches the same rules as a flat APK. A framework wins by marker presence;
-ties break on `weight`, then on the number of distinct entries matched. An app
-with both Flutter and React Native markers is reported as hybrid.
+ties break on `weight`, then on the number of distinct entries matched — so a
+more specific rule outranks a general one it overlaps with (`maui` above
+`xamarin`). An app with both Flutter and React Native markers is reported as
+hybrid.
+
+`apk_structure` is what separates "no framework markers" from "could not tell":
+a native verdict is only confident when both patterns matched, meaning a whole
+APK was read rather than a fragment.
 
 ## Measuring accuracy against real APKs
 
@@ -322,13 +341,23 @@ an empty corpus fails rather than reporting success.
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q     # 18 fixture-based tests
+python3 -m pytest tests/ -q          # unit + fixture tests
+ruff check frider tools tests        # lint (config in pyproject.toml)
 ```
+
+Fixtures are synthetic zips built from the same assumptions the rules were
+written from, so a green suite says the matcher works — not that a fingerprint
+is right. New or changed markers stay provisional until
+[`tools/corpus_check.py`](#measuring-accuracy-against-real-apks) has run over
+real APKs.
+
+Changes are recorded in [CHANGELOG.md](CHANGELOG.md); the threat model and
+reporting process are in [SECURITY.md](SECURITY.md).
 
 ## Roadmap
 
-- [ ] full-corpus re-validation against real APK sets (the pass that first
-      caught the Cordova/Kony blind spot)
+- [x] a harness for validating against real APK sets — `tools/corpus_check.py`
+- [ ] a published accuracy figure from running it over a labelled corpus
 - [ ] framework **version** extraction (Flutter engine, Hermes, RN) — deliberately
       not in v1: it needs per-framework verification before shipping numbers
 - [ ] optional YARA-rule backend (`yara-python`) so rules can be shared as `.yar`
