@@ -93,6 +93,18 @@ def test_readme_tagline_matches_the_running_version():
     )
 
 
+def test_readme_json_samples_show_the_running_version():
+    """The README carries `tool_version` in more than one sample payload now
+    (a classification run and a --list run). A release that updates one and
+    misses the other ships a sample that contradicts the tool."""
+    from frider import __version__
+
+    found = re.findall(r'"tool_version":\s*"([^"]+)"', README.read_text(encoding="utf-8"))
+    assert found, "README no longer shows a tool_version sample"
+    wrong = [v for v in found if v != __version__]
+    assert not wrong, f"README JSON samples show {wrong}, but frider is {__version__}"
+
+
 def test_readme_documents_every_framework_id():
     """`framework` is the documented, stable id callers branch on. Adding a
     fingerprint without listing it leaves the contract's own docs wrong — which
