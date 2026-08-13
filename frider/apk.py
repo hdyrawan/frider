@@ -12,11 +12,15 @@ entries survive their source archive being garbage-collected.
 
 from __future__ import annotations
 
-import io
 import os
+import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import IO, Callable, List, Optional
+
+# Streaming chunk for copying nested archive members out of their container.
+COPY_CHUNK = 1024 * 1024
 
 
 CONTAINER_SUFFIXES = (".apk", ".xapk", ".apks")
@@ -40,12 +44,33 @@ def _make_file_reader(path: str, name: str) -> Callable[[], bytes]:
 
 
 def _make_buffer_reader(zf: zipfile.ZipFile, name: str) -> Callable[[], bytes]:
-    """Read from an in-memory zip that the caller keeps referenced."""
+    """Read from a nested zip whose backing file the caller keeps referenced."""
 
     def read() -> bytes:
         return zf.read(name)
 
     return read
+
+
+def _spool_member(zf: zipfile.ZipFile, name: str) -> IO[bytes]:
+    """Copy a nested archive member out to a temp file, streaming.
+
+    ``zipfile`` needs a seekable file object, so a nested APK cannot simply be
+    read lazily from its container. Buffering it in memory instead cost a
+    resident copy of every split — 122 MiB for a 180 MiB XAPK, and real ones
+    reach several GB — purely to list entry *names*. Spooling to disk keeps
+    that bounded. ``SpooledTemporaryFile`` is deliberately not used: it lacks
+    ``seekable()`` before Python 3.11, and this package supports 3.9.
+    """
+    tmp = tempfile.TemporaryFile()
+    try:
+        with zf.open(name) as src:
+            shutil.copyfileobj(src, tmp, COPY_CHUNK)
+        tmp.seek(0)
+        return tmp
+    except BaseException:
+        tmp.close()
+        raise
 
 
 def _zip_entries(zf: zipfile.ZipFile, reopen_path: Optional[str], prefix: str = "") -> List[Entry]:
@@ -98,9 +123,10 @@ def entries_for(path: str) -> List[Entry]:
                 inner = e.path.split("!")[-1]
                 if not e.is_dir and inner.lower().endswith(CONTAINER_SUFFIXES):
                     try:
-                        assert e.read is not None
-                        data = e.read()
-                        nzf = zipfile.ZipFile(io.BytesIO(data))
+                        # nzf keeps the temp file referenced, and the readers
+                        # keep nzf referenced, so it lives exactly as long as
+                        # the entries do.
+                        nzf = zipfile.ZipFile(_spool_member(zf, e.path))
                         out.extend(_zip_entries(nzf, reopen_path=None, prefix=e.path))
                     except (zipfile.BadZipFile, OSError):
                         pass

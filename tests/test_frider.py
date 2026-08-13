@@ -2,6 +2,7 @@
 
 import io
 import os
+import pathlib
 import re
 import zipfile
 
@@ -741,3 +742,57 @@ def test_framework_confidence_still_counts_only_the_winner(tmp_path):
     r = classify(str(apk))
     assert r.framework == "kony"
     assert r.confidence == "Medium"
+
+
+# ---- nested containers must not be buffered in memory ----
+
+def test_spool_member_streams_to_a_real_file(tmp_path):
+    """Deterministic half of the memory fix: the nested archive is backed by a
+    real file, not an in-memory buffer. fileno() raises on BytesIO."""
+    from frider.apk import _spool_member
+
+    payload = b"nested-apk-bytes" * 1024
+    outer = tmp_path / "c.xapk"
+    with zipfile.ZipFile(outer, "w") as z:
+        z.writestr("inner.apk", payload)
+
+    with zipfile.ZipFile(outer) as z:
+        spooled = _spool_member(z, "inner.apk")
+    assert spooled.fileno() > 0, "nested member is buffered in memory"
+    assert spooled.read() == payload
+    spooled.close()
+
+
+def test_nested_container_spools_every_member_instead_of_buffering(tmp_path, monkeypatch):
+    """Regression: each nested split was read whole into BytesIO just to list
+    entry names, so a 180 MiB XAPK cost 122 MiB resident.
+
+    Asserted structurally rather than by measuring RSS: ru_maxrss is a
+    lifetime peak whose value depends on how the process was spawned, so an
+    RSS threshold here passes even against the buffering implementation.
+    """
+    import frider.apk as apk
+
+    container = tmp_path / "big.xapk"
+    with zipfile.ZipFile(container, "w") as z:
+        for name in ("base.apk", "split_a.apk"):
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w") as inner:
+                inner.writestr("lib/arm64-v8a/libflutter.so", b"engine")
+            z.writestr(name, buf.getvalue())
+        z.writestr("manifest.json", b"{}")
+
+    spooled = []
+    real = apk._spool_member
+
+    def tracking(zf, name):
+        spooled.append(name)
+        return real(zf, name)
+
+    monkeypatch.setattr(apk, "_spool_member", tracking)
+    entries = apk.entries_for(str(container))
+
+    assert spooled == ["base.apk", "split_a.apk"], \
+        "a nested member bypassed the spool and was buffered in memory"
+    assert any(e.path.endswith("!lib/arm64-v8a/libflutter.so") for e in entries)
+    assert classify_entries(entries, RULES).framework == "flutter"
