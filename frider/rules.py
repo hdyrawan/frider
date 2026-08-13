@@ -120,6 +120,16 @@ def classify_entries(entries: List[Entry], rules: Dict) -> Result:
             if found:
                 matched_rules.append(marker)
                 matched_paths.extend(found)
+        # A framework can require a runtime library to actually be present:
+        # asset markers (a bundled JS bundle, an assets/ dir) corroborate but
+        # must not claim a framework on their own — a bundled copy that
+        # Android would never load is a payload, not a framework. When
+        # ``requires`` is set, at least one of those markers must match.
+        if matched_paths and fw.get("requires"):
+            required = any(find(p) for p in fw["requires"])
+            if not required:
+                matched_paths = []
+                matched_rules = []
         if matched_paths:
             hits[fw_id] = FrameworkHit(
                 id=fw_id,
