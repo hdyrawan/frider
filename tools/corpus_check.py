@@ -113,7 +113,7 @@ def report(cases: List[Case], stream=None) -> float:
     for c in cases:
         per_label[c.expected].append(c)
 
-    width = max(len(l) for l in per_label)
+    width = max(len(label) for label in per_label)
     print(f"{'expected':<{width}}  {'n':>4}  {'ok':>4}  {'acc':>7}  confusions", file=stream)
     print("-" * (width + 34), file=stream)
     for label in sorted(per_label):
@@ -121,8 +121,9 @@ def report(cases: List[Case], stream=None) -> float:
         ok = sum(1 for c in group if c.ok)
         wrong = Counter(c.got for c in group if not c.ok)
         confusions = ", ".join(f"{got}x{n}" for got, n in wrong.most_common()) or "-"
-        print(f"{label:<{width}}  {len(group):>4}  {ok:>4}  {100.0 * ok / len(group):>6.1f}%  {confusions}",
-              file=stream)
+        pct = 100.0 * ok / len(group)
+        row = f"{label:<{width}}  {len(group):>4}  {ok:>4}  {pct:>6.1f}%  {confusions}"
+        print(row, file=stream)
 
     print(f"\n{correct}/{len(cases)} correct — {accuracy:.1f}% accuracy", file=stream)
 

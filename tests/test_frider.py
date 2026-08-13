@@ -9,8 +9,8 @@ import zipfile
 import pytest
 
 from frider.apk import entries_for, innermost
-from frider.rules import classify_entries, load_rules
 from frider.cli import build_parser
+from frider.rules import classify_entries, load_rules
 
 RULES = load_rules()
 
@@ -232,8 +232,9 @@ def test_module_entry_exit_codes_propagate(flutter_apk, tmp_path):
                         capture_output=True, text=True)
     assert ok.returncode == 0
 
-    bad = subprocess.run([sys.executable, "-m", "frider", str(tmp_path / "missing.apk"), "--no-color"],
-                         capture_output=True, text=True)
+    bad = subprocess.run(
+        [sys.executable, "-m", "frider", str(tmp_path / "missing.apk"), "--no-color"],
+        capture_output=True, text=True)
     assert bad.returncode == 1
     assert "ERROR" in bad.stdout
 
@@ -246,7 +247,8 @@ def test_corrupt_zip_is_clean_error(tmp_path):
     import sys
     import zipfile as zf_mod
 
-    local = b"PK\x03\x04" + struct.pack("<HHHHH", 20, 0, 0, 0, 0) + b"a.txt" + b"\x00" * 16 + b"hello"
+    local = (b"PK\x03\x04" + struct.pack("<HHHHH", 20, 0, 0, 0, 0)
+             + b"a.txt" + b"\x00" * 16 + b"hello")
     eocd = b"PK\x05\x06" + struct.pack("<HHHHIIH", 0, 0, 1, 1, 64, 40, 0)
     corrupt = tmp_path / "corrupt.apk"
     corrupt.write_bytes(local + b"\x90" * 64 + eocd)
@@ -504,7 +506,7 @@ def test_banner_art_is_intact():
     lines = BANNER.strip("\n").split("\n")
     assert len(lines) == 6
     assert lines[0].startswith(" ______")
-    assert [l[0] for l in lines] == [" ", "|", "|", "|", "|", "\\"]
+    assert [line[0] for line in lines] == [" ", "|", "|", "|", "|", "\\"]
     assert "\\___||_|" in lines[5]
 
 
@@ -540,7 +542,6 @@ def test_banner_stays_out_of_normal_and_json_output(flutter_apk):
 
 def test_readme_banner_matches_the_code():
     """The README copy and frider.ui.BANNER must not drift apart."""
-    import pathlib
 
     from frider.ui import BANNER
 
@@ -559,7 +560,6 @@ DESCRIBED_ELSEWHERE = [
 
 def _all_descriptions():
     """The four places frider describes itself, which used to disagree."""
-    import pathlib
 
     import frider
     from frider.cli import build_parser
@@ -607,7 +607,7 @@ def test_multiline_error_cannot_break_the_table():
     r.errors.append("command failed: adb -s X pull /data/app/base.apk\n"
                     "error: device offline\nmore detail")
     out = render_table([r], palette=Palette(enabled=False))
-    assert len(set(len(l) for l in out.splitlines())) == 1, "ragged table"
+    assert len({len(line) for line in out.splitlines()}) == 1, "ragged table"
     assert "device offline" in out
 
 
@@ -640,7 +640,6 @@ def test_version_is_declared_in_exactly_one_place():
     """Regression: the version lived in both pyproject.toml and __init__.py.
     Once they drifted, `frider --version` would disagree with the installed
     wheel. pyproject now reads it from the package."""
-    import pathlib
 
     import frider
 

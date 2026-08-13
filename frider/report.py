@@ -87,7 +87,8 @@ def render_table(results: List[Result], palette: Optional[Palette] = None) -> st
     out = []
     sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
     out.append(sep)
-    out.append("| " + " | ".join(palette.bold(h.ljust(widths[i])) for i, h in enumerate(headers)) + " |")
+    header_cells = [palette.bold(h.ljust(widths[i])) for i, h in enumerate(headers)]
+    out.append("| " + " | ".join(header_cells) + " |")
     out.append(sep)
     for plain in plain_rows:
         cells = [
