@@ -7,7 +7,7 @@
 |  _|  | '__|| | / _` | / _ \| '__|
 | |    | |   | || (_| ||  __/| |
 \_|    |_|   |_| \__,_| \___||_|
- Android app framework detector · v0.3.0
+ Android app framework detector · v0.4.0
 ```
 
 [![tests](https://github.com/hdyrawan/frider/actions/workflows/test.yml/badge.svg)](https://github.com/hdyrawan/frider/actions/workflows/test.yml)
@@ -106,7 +106,7 @@ python3 -m pytest tests/   # run the test suite
 ### Verify & uninstall
 
 ```bash
-frider --version        # e.g. "frider 0.3.0"
+frider --version        # e.g. "frider 0.4.0"
 frider --help           # full usage
 pipx uninstall frider   # or: uv tool uninstall frider / pip uninstall frider
 ```
@@ -320,7 +320,7 @@ verdict can be audited rather than trusted.
 {
   "schema_version": 1,
   "tool": "frider",
-  "tool_version": "0.3.0",
+  "tool_version": "0.4.0",
   "results": [
     {
       "source": "rn.apk",

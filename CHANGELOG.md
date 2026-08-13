@@ -4,7 +4,7 @@ All notable changes to this project are documented here. This project follows
 [semantic versioning](https://semver.org/): the `--json` payload carries its own
 `schema_version`, bumped whenever a field changes meaning or disappears.
 
-## Unreleased
+## 0.4.0
 
 ### Added
 
@@ -19,7 +19,7 @@ All notable changes to this project are documented here. This project follows
 
 - **The banner prints on every run, on stderr** — the wordmark in two solid
   colours, `F` red and `rider` blue, with a one-line description and the
-  running version under it (`Android app framework detector · v0.3.0`).
+  running version under it (`Android app framework detector · v0.4.0`).
   It appeared only in `--help` before. stderr rather than stdout because stdout
   is the contract: `--json` gets piped into `jq` and tables get piped into
   `awk`, and neither survives seven lines of ASCII art in front of it. The
