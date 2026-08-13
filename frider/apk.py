@@ -19,6 +19,9 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional
 
 
+CONTAINER_SUFFIXES = (".apk", ".xapk", ".apks")
+
+
 @dataclass
 class Entry:
     path: str
@@ -68,15 +71,20 @@ def entries_for(path: str) -> List[Entry]:
         for root, _dirs, files in os.walk(path):
             for fn in sorted(files):
                 fp = os.path.join(root, fn)
-                rel = os.path.relpath(fp, path)
+                # Rules match on '/' separators, so normalise Windows '\'.
+                rel = os.path.relpath(fp, path).replace(os.sep, "/")
                 if zipfile.is_zipfile(fp):
                     # a real APK/split set inside the dir — surface its entries
                     for e in entries_for(fp):
                         out.append(Entry(f"{rel}!{e.path}", e.is_dir, e.read))
+                elif fn.lower().endswith(CONTAINER_SUFFIXES):
+                    # Named like an APK but unreadable as one (truncated pull,
+                    # bad split). Surfacing it as an opaque blob would let the
+                    # set classify as "native" — a wrong answer is worse than
+                    # an error, so refuse the whole set.
+                    raise ValueError(f"unreadable apk in set: {fp}")
                 else:
-                    with open(fp, "rb") as fh:
-                        data = fh.read()
-                    out.append(Entry(rel, False, _make_bytes_reader(data)))
+                    out.append(Entry(rel, False, _make_lazy_file_reader(fp)))
         return out
 
     if not zipfile.is_zipfile(path):
@@ -88,7 +96,7 @@ def entries_for(path: str) -> List[Entry]:
             # Surface nested APKs (XAPK/APKS containers hold .apk members).
             for e in list(out):
                 inner = e.path.split("!")[-1]
-                if not e.is_dir and inner.lower().endswith((".apk", ".xapk", ".apks")):
+                if not e.is_dir and inner.lower().endswith(CONTAINER_SUFFIXES):
                     try:
                         assert e.read is not None
                         data = e.read()
@@ -103,9 +111,14 @@ def entries_for(path: str) -> List[Entry]:
         raise ValueError(f"corrupt zip: {path} ({e})") from e
 
 
-def _make_bytes_reader(data: bytes) -> Callable[[], bytes]:
+def _make_lazy_file_reader(path: str) -> Callable[[], bytes]:
+    """Read a loose file on demand. Classification only ever looks at entry
+    names, so slurping every payload up front just pinned hundreds of MiB of
+    asset/obb bytes in RAM for nothing."""
+
     def read() -> bytes:
-        return data
+        with open(path, "rb") as fh:
+            return fh.read()
 
     return read
 

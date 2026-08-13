@@ -1,6 +1,8 @@
 """frider tests — build tiny fixture APK zips in tmp and assert classifications."""
 
 import io
+import os
+import re
 import zipfile
 
 import pytest
@@ -257,3 +259,235 @@ def test_corrupt_zip_is_clean_error(tmp_path):
     assert "ERROR" in r.stdout
     assert "corrupt zip" in r.stdout
     assert "Traceback" not in r.stderr
+
+
+# ---- regressions for the review round ----
+
+def test_colored_table_columns_stay_aligned(flutter_apk, native_apk):
+    """Regression: cells were padded with str.ljust AFTER coloring, so the
+    ANSI escapes counted toward the width and every colored row came out
+    ragged. Rows must be as wide as the separator, colors on or off."""
+    from frider.report import render_table
+    from frider.ui import Palette
+
+    results = [classify(str(flutter_apk)), classify(str(native_apk))]
+    for palette in (Palette(enabled=False), Palette(enabled=True)):
+        lines = render_table(results, palette=palette).splitlines()
+        sep_width = len(lines[0])
+        visible = [re.sub(r"\x1b\[[0-9;]*m", "", ln) for ln in lines]
+        assert all(len(v) == sep_width for v in visible), (
+            f"ragged table (colors={palette.enabled}): "
+            f"{[len(v) for v in visible]} vs sep {sep_width}"
+        )
+
+
+def test_unreadable_apk_in_set_errors_instead_of_reading_native(tmp_path):
+    """Regression: a truncated pull is not a zip, so it used to be surfaced as
+    an opaque file entry and the set classified as "native" — a silently wrong
+    answer for a file frider could not read."""
+    d = tmp_path / "pulled"
+    d.mkdir()
+    make_apk(d / "apk_0.apk", {"classes.dex": b"d"})
+    (d / "apk_1.apk").write_bytes(b"PK\x03\x04truncated-download")
+
+    with pytest.raises(ValueError, match="unreadable apk"):
+        entries_for(str(d))
+
+
+def test_loose_non_apk_files_are_still_tolerated(tmp_path):
+    """...but a non-APK payload beside the splits is fine and stays lazy."""
+    d = tmp_path / "pulled"
+    d.mkdir()
+    make_apk(d / "apk_0.apk", {"lib/arm64-v8a/libflutter.so": b"e"})
+    (d / "assets.obb").write_bytes(b"\x00" * 1024)
+
+    r = classify_entries(entries_for(str(d)), RULES)
+    assert r.verdict == "Flutter / Dart"
+
+
+def test_loose_file_reader_is_lazy_not_slurped(tmp_path):
+    """Regression: loose files were read into memory eagerly even though
+    classification only ever looks at entry names."""
+    d = tmp_path / "pulled"
+    d.mkdir()
+    payload = d / "big.obb"
+    payload.write_bytes(b"abc")
+    entry = next(e for e in entries_for(str(d)) if e.path == "big.obb")
+    payload.write_bytes(b"xyz")  # changed after entries_for() returned
+    assert entry.read() == b"xyz", "reader captured stale bytes at scan time"
+
+
+def test_confidence_counts_only_the_winning_framework(tmp_path):
+    """Regression: confidence summed markers across ALL frameworks, so an
+    unrelated weak hit could push a one-marker verdict up to High."""
+    apk = make_apk(tmp_path / "mixed.apk", {
+        "lib/arm64-v8a/libkony.so": b"k",       # winner, 1 marker
+        "assets/www/index.html": b"<html/>",    # unrelated cordova hit
+    })
+    r = classify(str(apk))
+    assert r.verdict == "Kony (Temenos)"
+    assert r.confidence == "Medium"
+
+
+def test_generic_config_xml_is_not_cordova(tmp_path):
+    """Regression: res/xml/config.xml is a generic Android resource path that
+    plenty of native apps and SDKs ship — it must not alone mean Cordova."""
+    apk = make_apk(tmp_path / "sdk.apk", {
+        "classes.dex": b"d",
+        "AndroidManifest.xml": b"<m/>",
+        "res/xml/config.xml": b"<config/>",
+    })
+    assert classify(str(apk)).verdict == "Native (no framework markers)"
+
+
+def test_fbjni_alone_is_not_react_native(tmp_path):
+    """Regression: fbjni ships with several Meta libraries (SoLoader, Fresco,
+    Flipper) in apps that have no React Native at all."""
+    apk = make_apk(tmp_path / "fb.apk", {
+        "classes.dex": b"d",
+        "lib/arm64-v8a/libfbjni.so": b"fb",
+    })
+    assert classify(str(apk)).verdict == "Native (no framework markers)"
+
+
+def test_both_engines_are_both_reported(tmp_path):
+    """A split set can ship Hermes and JSC; naming only the first hid that."""
+    apk = make_apk(tmp_path / "both.apk", {
+        "assets/index.android.bundle": b"js",
+        "lib/arm64-v8a/libhermes.so": b"h",
+        "lib/arm64-v8a/libjsc.so": b"jsc",
+    })
+    r = classify(str(apk))
+    assert set(r.engines) == {"hermes", "jsc"}
+    assert "hermes" in r.verdict and "jsc" in r.verdict
+
+
+def test_deeply_nested_ionic_bundle_is_detected(tmp_path):
+    """Real Ionic builds nest deeper than one directory under assets/www."""
+    apk = make_apk(tmp_path / "ionic.apk", {
+        "assets/www/index.html": b"<html/>",
+        "assets/www/build/vendor/ionic.bundle.js": b"i",
+    })
+    assert "ionic" in classify(str(apk)).markers
+
+
+def test_bad_rules_file_is_a_clean_error_not_a_traceback(tmp_path):
+    """Regression: a missing/invalid --rules file raised straight out of
+    load_rules as FileNotFoundError / JSONDecodeError / re.error."""
+    import subprocess
+    import sys
+
+    bad_json = tmp_path / "bad.json"
+    bad_json.write_text("{ not json")
+    bad_regex = tmp_path / "badrx.json"
+    bad_regex.write_text('{"frameworks":[{"id":"x","name":"X","markers":["lib/(oops"]}]}')
+
+    for rules_arg in (str(tmp_path / "missing.json"), str(bad_json), str(bad_regex)):
+        r = subprocess.run(
+            [sys.executable, "-m", "frider", "--rules", rules_arg, "app.apk", "--no-color"],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 2, rules_arg
+        assert "Traceback" not in r.stderr, rules_arg
+        assert "cannot load rules" in r.stderr, rules_arg
+
+
+def test_load_rules_rejects_malformed_framework_entry(tmp_path):
+    f = tmp_path / "r.json"
+    f.write_text('{"frameworks":[{"name":"no id here","markers":[]}]}')
+    with pytest.raises(ValueError, match="missing id"):
+        load_rules(str(f))
+
+
+# ---- adb pull behaviour (previously untested) ----
+
+@pytest.fixture
+def fake_adb(monkeypatch, tmp_path):
+    """Stub subprocess.run so adb behaviour is testable without a device."""
+    import subprocess as sp
+
+    state = {"splits": ["/data/app/base.apk"], "payload": None, "calls": []}
+
+    def fake_run(cmd, **kw):
+        state["calls"].append(cmd)
+        if "path" in cmd:
+            out = "".join(f"package:{p}\r\n" for p in state["splits"])
+            return sp.CompletedProcess(cmd, 0, out, "")
+        if "pull" in cmd:
+            dest = cmd[-1]
+            payload = state["payload"]
+            if payload is None:
+                make_apk(dest, {"classes.dex": b"d"})
+            else:
+                open(dest, "wb").write(payload)
+            return sp.CompletedProcess(cmd, 0, "1 file pulled", "")
+        return sp.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    return state
+
+
+def test_pull_clears_stale_splits_from_cache(fake_adb, tmp_path):
+    """Regression: the cache dir was reused with exist_ok=True, so a package
+    that used to ship more splits left stale apk_N.apk files behind and they
+    were classified as part of the new set."""
+    from frider.adb import pull_package
+
+    cache = str(tmp_path / "cache")
+    fake_adb["splits"] = ["/data/app/base.apk", "/data/app/split_config.apk"]
+    d, count = pull_package("SERIAL", "com.example", cache)
+    assert count == 2
+    # leave a marker only the stale split would carry
+    make_apk(os.path.join(d, "apk_1.apk"), {"lib/arm64-v8a/libflutter.so": b"e"})
+    assert classify_entries(entries_for(d), RULES).verdict == "Flutter / Dart"
+
+    # the app updates and now ships a single split
+    fake_adb["splits"] = ["/data/app/base.apk"]
+    d, count = pull_package("SERIAL", "com.example", cache)
+    assert count == 1
+    assert sorted(os.listdir(d)) == ["apk_0.apk"], "stale split survived the re-pull"
+    assert classify_entries(entries_for(d), RULES).verdict == "Native (no framework markers)"
+
+
+def test_pulled_but_unreadable_apk_never_reports_native(fake_adb, tmp_path):
+    """Regression: adb exits 0 but writes a truncated file — that used to be
+    treated as an opaque blob and the package classified as native."""
+    from frider.adb import pull_package
+
+    fake_adb["payload"] = b"PK\x03\x04truncated"
+    d, _ = pull_package("SERIAL", "com.example", str(tmp_path / "cache"))
+    with pytest.raises(ValueError, match="unreadable apk"):
+        entries_for(d)
+
+
+def test_adb_missing_binary_is_a_clean_error(monkeypatch):
+    import subprocess as sp
+
+    from frider.adb import AdbError, apk_paths
+
+    def boom(cmd, **kw):
+        raise FileNotFoundError(2, "No such file or directory", "adb")
+
+    monkeypatch.setattr(sp, "run", boom)
+    with pytest.raises(AdbError, match="adb not found on PATH"):
+        apk_paths("SERIAL", "com.example")
+
+
+def test_adb_hang_is_bounded_by_timeout(monkeypatch):
+    import subprocess as sp
+
+    from frider.adb import AdbError, list_third_party_packages
+
+    def hang(cmd, **kw):
+        raise sp.TimeoutExpired(cmd, kw.get("timeout", 30))
+
+    monkeypatch.setattr(sp, "run", hang)
+    with pytest.raises(AdbError, match="timed out"):
+        list_third_party_packages("SERIAL")
+
+
+def test_package_list_parsing_tolerates_crlf(fake_adb):
+    from frider.adb import apk_paths
+
+    fake_adb["splits"] = ["/data/app/base.apk", "/data/app/split.apk"]
+    assert apk_paths("SERIAL", "com.example") == ["/data/app/base.apk", "/data/app/split.apk"]
