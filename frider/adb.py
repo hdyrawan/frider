@@ -29,7 +29,10 @@ def _run(cmd: List[str], timeout: int = SHELL_TIMEOUT) -> str:
     except subprocess.TimeoutExpired:
         raise AdbError(f"timed out after {timeout}s: {' '.join(cmd)}") from None
     if r.returncode != 0:
-        raise AdbError(f"command failed: {' '.join(cmd)}\n{r.stderr.strip()}")
+        detail = r.stderr.strip()
+        # Only append stderr when there is some; otherwise the message ends in
+        # a stray newline that used to land inside a report cell.
+        raise AdbError(f"command failed: {' '.join(cmd)}" + (f"\n{detail}" if detail else ""))
     return r.stdout
 
 
