@@ -76,12 +76,14 @@ def _pad(styled: str, plain: str, width: int) -> str:
     return styled + " " * max(0, width - display_width(plain))
 
 
-def render_table(results: List[Result], palette: Optional[Palette] = None) -> str:
-    if not results:
-        return "(no inputs classified)"
-    palette = palette or Palette()
-    headers = ["source", "verdict", "confidence", "markers", "notes"]
-    plain_rows = [to_row(r) for r in results]
+def _render_table(headers, plain_rows, palette, styler=None) -> str:
+    """Bordered table. ``styler(palette, row, index) -> str`` colours a cell;
+    without one the cells are printed plain.
+
+    Widths are measured with ``display_width`` and padding is applied to the
+    plain text, never to the styled string — ANSI codes are zero-width, and
+    CJK app names are double-width.
+    """
     widths = [display_width(h) for h in headers]
     for row in plain_rows:
         for i, cell in enumerate(row):
@@ -95,12 +97,42 @@ def render_table(results: List[Result], palette: Optional[Palette] = None) -> st
     out.append(sep)
     for plain in plain_rows:
         cells = [
-            _pad(_style_cell(palette, plain, i), cell, widths[i])
+            _pad(styler(palette, plain, i) if styler else cell, cell, widths[i])
             for i, cell in enumerate(plain)
         ]
         out.append("| " + " | ".join(cells) + " |")
     out.append(sep)
     return "\n".join(out)
+
+
+def render_table(results: List[Result], palette: Optional[Palette] = None) -> str:
+    if not results:
+        return "(no inputs classified)"
+    palette = palette or Palette()
+    headers = ["source", "verdict", "confidence", "markers", "notes"]
+    return _render_table(headers, [to_row(r) for r in results], palette, _style_cell)
+
+
+def render_package_table(packages: List[str], palette: Optional[Palette] = None) -> str:
+    """The ``--list`` view: installed packages, nothing pulled or classified."""
+    if not packages:
+        return "(no packages installed)"
+    palette = palette or Palette()
+    return _render_table(["package"], [[p] for p in packages], palette)
+
+
+def render_package_json(packages: List[str]) -> str:
+    """``--list --json``. Same envelope as a classification run, so a caller
+    checks ``schema_version`` the one way whatever it asked for."""
+    return json.dumps(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "tool": "frider",
+            "tool_version": __version__,
+            "packages": packages,
+        },
+        indent=2,
+    )
 
 
 def render_json(results: List[Result]) -> str:

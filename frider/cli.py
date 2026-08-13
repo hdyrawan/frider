@@ -23,7 +23,7 @@ from typing import List, Optional
 
 from . import __version__
 from .apk import entries_for
-from .report import render_json, render_table
+from .report import render_json, render_package_json, render_package_table, render_table
 from .rules import classify_entries, load_rules
 from .ui import BANNER, Palette, progress, summarize
 
@@ -59,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="adb device serial (default: $ANDROID_PROBE_SERIAL)")
     p.add_argument("--all", action="store_true",
                    help="with --adb: classify every third-party package, not just the named ones")
+    p.add_argument("--list", action="store_true", dest="list_packages",
+                   help="with --adb: list installed third-party packages without pulling them")
+    p.add_argument("--list-all", action="store_true", dest="list_all",
+                   help="with --adb: like --list, including system packages")
     p.add_argument("--json", action="store_true", help="machine-readable JSON output")
     p.add_argument("--rules", metavar="FILE", help="custom rules.json (default: bundled)")
     p.add_argument("--cache-dir", metavar="DIR", default=None,
@@ -118,8 +122,50 @@ def _error_result(source: str, message: str):
     return r
 
 
+def _list_mode(args, palette) -> int:
+    """``--adb --list``: what is installed, without pulling a single APK.
+
+    Listing is the step before a scan — it costs one adb call, where --all
+    costs a full pull of every package.
+    """
+    from .adb import AdbError, list_packages
+
+    if not args.adb:
+        print("frider: --list needs --adb (it lists what is on a device)", file=sys.stderr)
+        return 2
+    serial = args.serial or DEFAULT_ADB_SERIAL
+    if not serial:
+        print("frider: --adb needs a serial (pass --serial, or set "
+              "ANDROID_PROBE_SERIAL)", file=sys.stderr)
+        return 2
+    if args.paths:
+        # Same reasoning as --all: silently dropping the names would look
+        # like a listing filtered to exactly those packages.
+        progress(f"frider: --list shows every package; ignoring the "
+                 f"{len(args.paths)} name(s) given")
+    try:
+        packages = list_packages(serial, include_system=args.list_all)
+    except AdbError as e:
+        print(f"frider: {e}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(render_package_json(packages))
+    else:
+        print(render_package_table(packages, palette))
+        scope = "package(s)" if args.list_all else "third-party package(s)"
+        # stdout, like the results summary: on stderr it overtakes the table
+        # whenever stdout is a pipe, since only stdout is block-buffered.
+        print(palette.dim(f"{len(packages)} {scope}"))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    # The banner goes to stderr on every run, never stdout: --json is a
+    # contract a caller pipes into jq, and a table someone pipes into awk is
+    # just as easily broken by seven lines of ASCII art in front of it.
+    print(BANNER.strip("\n"), file=sys.stderr)
     try:
         rules = load_rules(args.rules)
     except (OSError, ValueError, re.error) as e:
@@ -127,6 +173,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"frider: cannot load rules: {e}", file=sys.stderr)
         return 2
     palette = Palette(enabled=False if args.no_color else None)
+
+    if args.list_packages or args.list_all:
+        return _list_mode(args, palette)
 
     results = []
     scratch = None
