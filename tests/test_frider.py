@@ -322,16 +322,24 @@ def test_corrupt_zip_is_clean_error(tmp_path):
     eocd = b"PK\x05\x06" + struct.pack("<HHHHIIH", 0, 0, 1, 1, 64, 40, 0)
     corrupt = tmp_path / "corrupt.apk"
     corrupt.write_bytes(local + b"\x90" * 64 + eocd)
-    assert zf_mod.is_zipfile(str(corrupt))  # passes the magic check...
-    with pytest.raises(zf_mod.BadZipFile):
-        zf_mod.ZipFile(str(corrupt)).infolist()  # ...but breaks on open
+
+    # Which stdlib check rejects this file moved in 3.14: before it, is_zipfile()
+    # accepted the magic and the read blew up on the central directory; from 3.14
+    # is_zipfile() rejects it outright. Both are "looks like an APK, is not one",
+    # and frider owes the same answer either way — so assert the contract below,
+    # not which layer noticed.
+    if zf_mod.is_zipfile(str(corrupt)):
+        with pytest.raises(zf_mod.BadZipFile):
+            zf_mod.ZipFile(str(corrupt)).infolist()
 
     r = subprocess.run([sys.executable, "-m", "frider", str(corrupt), "--no-color"],
                        capture_output=True, text=True)
     assert r.returncode == 1
     assert "ERROR" in r.stdout
-    assert "corrupt zip" in r.stdout
     assert "Traceback" not in r.stderr
+    # The reason is reported, whichever check caught it — never "native".
+    assert "corrupt zip" in r.stdout or "not a zip" in r.stdout
+    assert "native" not in r.stdout.lower()
 
 
 # ---- regressions for the review round ----

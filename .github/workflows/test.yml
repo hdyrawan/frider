@@ -27,7 +27,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        # 3.14 is here because publish.yml builds on "3.x": without it the
+        # matrix can be green while the release build fails, which is exactly
+        # how a 3.14 zipfile change reached a release attempt instead of a PR.
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
         include:
           # requires-python claims Windows and macOS support, and directory
           # mode normalises path separators — so actually exercise both.
