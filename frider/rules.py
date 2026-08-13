@@ -97,6 +97,11 @@ def load_rules(path: Optional[str] = None) -> Dict:
 
     if not isinstance(rules, dict):
         raise ValueError("rules file must contain a JSON object")
+    # A kotlin block with neither key would disable Kotlin detection silently —
+    # the same misspelling in a framework entry is already a load error.
+    kotlin = rules.get("kotlin")
+    if kotlin is not None and not ("markers" in kotlin or "marker" in kotlin):
+        raise ValueError("kotlin rule needs 'markers' (list) or 'marker' (string)")
     for fw in rules.get("frameworks", []):
         missing = [k for k in ("id", "name") if k not in fw]
         if missing:

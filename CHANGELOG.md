@@ -30,10 +30,35 @@ All notable changes to this project are documented here. This project follows
 
 ### Added — detection
 
+- **Lynx (ByteDance)** fingerprint, framework id `lynx`. Lynx is a
+  cross-platform UI framework in the same class as React Native — its own
+  runtime (`liblynx.so`, `liblynxbase.so`) rendering `template.js` bundles
+  produced by its toolchain — and apps embedding it previously reported
+  `native`. The asset marker `assets/lynx_core.js` is gated behind `requires`,
+  so a bundle without the runtime cannot claim the framework. Found by sweeping
+  a device: one of 141 packages ships Lynx, and no other package matches the
+  marker.
 - `.NET MAUI`, `NativeScript`, `Qt for Android` and `Titanium` fingerprints.
   MAUI is weighted above `xamarin` so the more specific match wins.
 - The `xamarin` rule recognises modern .NET builds (assembly store,
   `libmono-android`), not only classic Xamarin.
+- `SecNeo DexShield` joins the notable-library list (`libDexHelper*.so`),
+  alongside the SecIron pair already there.
+
+### Added — documentation
+
+- **A measured accuracy figure**, from a 141-package device sweep cross-checked
+  against dex contents: 140/141 framework verdicts confirmed, `kotlin` correct
+  on 123/132 apps with readable dex. See the README.
+- **Three new *Known limits***, each observed in that sweep rather than
+  imagined: a build that excludes Kotlin's packaged resources reads
+  `kotlin: false`; `kotlin: true` means the Kotlin runtime is packaged, not
+  that the app's own code is Kotlin; and native libraries packed into a
+  compressed container (Meta's Superpack) hide the engine name, so such an app
+  can report `native` while embedding a framework.
+- AGENTS.md records how to verify a sub-signal against the dex, and the two
+  ways that check misleads — R8 renaming and dex packers make absence
+  meaningless, while a single vestigial class reference is not use.
 
 ### Fixed
 
@@ -42,17 +67,27 @@ All notable changes to this project are documented here. This project follows
   Every minified Kotlin app (i.e. most shipping apps) therefore read `kotlin: false`.
   The rule now accepts a `markers` list and also matches `kotlin/*.kotlin_builtins`
   and the `kotlinx *.version` stamps, both of which survive minification. The legacy
-  single-`marker` form still loads. Found on Bank Bumi Arta
-  (`mlpt.siemo.mobilebanking.bba`): a Kotlin app with no `.kotlin_module`, previously
-  reported `kotlin: false`, now `true`; framework verdict (native) was correct throughout.
+  single-`marker` form still loads. Found on a shipping banking app: a Kotlin app
+  with no `.kotlin_module`, previously reported `kotlin: false`, now `true`; its
+  framework verdict (native) was correct throughout. Verified afterwards against
+  dex contents over a 141-package device sweep — the signal goes from **42.4%**
+  (56/132) to **93.2%** (123/132) accurate on apps whose dex can be read. The
+  residual 9 are documented in the README's *Known limits*: 8 apps ship no Kotlin
+  resource at all because the build excludes them, and 1 packages the Kotlin
+  runtime without containing Kotlin code of its own.
+- **A `kotlin` rule with a misspelled key disabled Kotlin detection in
+  silence.** A block containing neither `markers` nor `marker` yielded no
+  patterns, so every app read `kotlin: false` with nothing to indicate why —
+  while the same typo in a framework entry was already a load error. Such a
+  rules file is now rejected at load time.
 - **An asset marker could claim a framework on its own.** `assets/index.android.bundle`
   alone was enough for a React Native verdict — but Android loads nothing from
   `assets/`, and a shipped bundle with no engine to execute it is a payload, not
-  a framework. Found on a real app: VCB Digibank ships a vestigial RN bundle on
+  a framework. Found on a real banking app that ships a vestigial RN bundle on
   a Flutter host and was misreported hybrid. Frameworks can now declare
   `requires` (runtime `.so` markers) that must match before the framework is
   claimed; asset markers corroborate but cannot fire alone. Flutter and RN both
-  declare `requires`; a full 141-package device sweep changed only the VCB
+  declare `requires`; a full 141-package device sweep changed only that one
   verdict after the fix.
 - **`Entry.match_path()` could silently truncate a path containing `!`.**
   When `inner` was missing, it fell back to re-deriving the path from the
