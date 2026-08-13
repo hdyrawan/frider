@@ -2,8 +2,12 @@
 
 Entries are plain names + an optional reader. Nested APKs inside an XAPK/APKS
 container are surfaced with a ``<container>!<inner-path>`` prefix so the
-classifier sees the inner zip's contents. Rules match against the innermost
-path (the part after the last ``!``).
+classifier sees the inner zip's contents.
+
+That prefix is for display only. The path rules match on travels alongside it as
+``Entry.inner`` (read via ``Entry.match_path()``), because ``!`` is a legal
+character in a zip entry name — parsing the boundary back out of the display
+path truncated real names like ``assets/we!rd/lib/...``.
 
 Readers are safe to call any time: file-backed entries reopen the zip on each
 read instead of capturing a handle that a ``with`` block later closed, so
@@ -31,6 +35,17 @@ class Entry:
     path: str
     is_dir: bool
     read: Optional[Callable[[], bytes]]
+    # The path rules match on, carried alongside rather than parsed back out of
+    # ``path``. ``!`` marks a container boundary in ``path`` for display, but it
+    # is also a legal character in a zip entry name, so recovering the inner
+    # path by splitting on it truncated names like ``assets/we!rd/lib/...`` —
+    # which both mis-cited the evidence and let an unrelated entry match a
+    # marker. Set at construction, where the boundary is actually known.
+    inner: Optional[str] = None
+
+    def match_path(self) -> str:
+        """The path a rule should be tested against."""
+        return self.inner if self.inner is not None else innermost(self.path)
 
 
 def _make_file_reader(path: str, name: str) -> Callable[[], bytes]:
@@ -79,11 +94,13 @@ def _zip_entries(zf: zipfile.ZipFile, reopen_path: Optional[str], prefix: str = 
         name = info.filename
         display = f"{prefix}!{name}" if prefix else name
         if name.endswith("/"):
-            out.append(Entry(display, True, None))
+            out.append(Entry(display, True, None, inner=name))
         elif reopen_path is not None:
-            out.append(Entry(display, False, _make_file_reader(reopen_path, name)))
+            out.append(Entry(display, False, _make_file_reader(reopen_path, name),
+                             inner=name))
         else:
-            out.append(Entry(display, False, _make_buffer_reader(zf, name)))
+            out.append(Entry(display, False, _make_buffer_reader(zf, name),
+                             inner=name))
     return out
 
 
@@ -101,7 +118,8 @@ def entries_for(path: str) -> List[Entry]:
                 if zipfile.is_zipfile(fp):
                     # a real APK/split set inside the dir — surface its entries
                     for e in entries_for(fp):
-                        out.append(Entry(f"{rel}!{e.path}", e.is_dir, e.read))
+                        out.append(Entry(f"{rel}!{e.path}", e.is_dir, e.read,
+                                         inner=e.match_path()))
                 elif fn.lower().endswith(CONTAINER_SUFFIXES):
                     # Named like an APK but unreadable as one (truncated pull,
                     # bad split). Surfacing it as an opaque blob would let the
@@ -109,7 +127,8 @@ def entries_for(path: str) -> List[Entry]:
                     # an error, so refuse the whole set.
                     raise ValueError(f"unreadable apk in set: {fp}")
                 else:
-                    out.append(Entry(rel, False, _make_lazy_file_reader(fp)))
+                    out.append(Entry(rel, False, _make_lazy_file_reader(fp),
+                                     inner=rel))
         return out
 
     if not zipfile.is_zipfile(path):
@@ -120,13 +139,12 @@ def entries_for(path: str) -> List[Entry]:
             out = _zip_entries(zf, reopen_path=path)
             # Surface nested APKs (XAPK/APKS containers hold .apk members).
             for e in list(out):
-                inner = e.path.split("!")[-1]
-                if not e.is_dir and inner.lower().endswith(CONTAINER_SUFFIXES):
+                if not e.is_dir and e.match_path().lower().endswith(CONTAINER_SUFFIXES):
                     try:
                         # nzf keeps the temp file referenced, and the readers
                         # keep nzf referenced, so it lives exactly as long as
                         # the entries do.
-                        nzf = zipfile.ZipFile(_spool_member(zf, e.path))
+                        nzf = zipfile.ZipFile(_spool_member(zf, e.match_path()))
                         out.extend(_zip_entries(nzf, reopen_path=None, prefix=e.path))
                     except (zipfile.BadZipFile, OSError):
                         pass

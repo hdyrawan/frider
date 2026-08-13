@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .apk import Entry, innermost
+from .apk import Entry
 
 DEFAULT_RULES = Path(__file__).parent / "rules.json"
 
@@ -96,7 +96,10 @@ def _dedup(values: List[str]) -> List[str]:
 
 
 def classify_entries(entries: List[Entry], rules: Dict) -> Result:
-    paths = [innermost(e.path) for e in entries if not e.is_dir]
+    # match_path(), not innermost(path): '!' is a legal zip entry-name
+    # character, so parsing the boundary back out of the display path
+    # truncated real names and matched markers that were never there.
+    paths = [e.match_path() for e in entries if not e.is_dir]
 
     # Precompile every pattern once; rules are few, entries can be thousands.
     compiled = {

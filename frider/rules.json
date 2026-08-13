@@ -1,10 +1,10 @@
 {
   "apk_structure": {
-    "manifest": "(^|/)AndroidManifest\\.xml$",
-    "code": "(^|/)classes[0-9]*\\.dex$"
+    "manifest": "^AndroidManifest\\.xml$",
+    "code": "^classes[0-9]*\\.dex$"
   },
   "kotlin": {
-    "marker": "META-INF/.*\\.kotlin_module"
+    "marker": "^META-INF/.*\\.kotlin_module$"
   },
   "frameworks": [
     {
@@ -12,9 +12,9 @@
       "name": "Flutter / Dart",
       "weight": 100,
       "markers": [
-        "lib/[^/]+/libflutter\\.so",
-        "assets/flutter_assets/",
-        "lib/[^/]+/libapp\\.so"
+        "^lib/[^/]+/libflutter\\.so$",
+        "^assets/flutter_assets/",
+        "^lib/[^/]+/libapp\\.so$"
       ]
     },
     {
@@ -22,15 +22,15 @@
       "name": "React Native",
       "weight": 100,
       "markers": [
-        "assets/index\\.android\\.bundle",
-        "lib/[^/]+/libreactnative[^/]*\\.so",
-        "lib/[^/]+/libhermes[^/]*\\.so",
-        "lib/[^/]+/libjsc\\.so",
-        "lib/[^/]+/libjsi\\.so"
+        "^assets/index\\.android\\.bundle$",
+        "^lib/[^/]+/libreactnative[^/]*\\.so$",
+        "^lib/[^/]+/libhermes[^/]*\\.so$",
+        "^lib/[^/]+/libjsc\\.so$",
+        "^lib/[^/]+/libjsi\\.so$"
       ],
       "engines": {
-        "hermes": "lib/[^/]+/libhermes[^/]*\\.so",
-        "jsc": "lib/[^/]+/libjsc\\.so|lib/[^/]+/libjscexecutor\\.so"
+        "hermes": "^lib/[^/]+/libhermes[^/]*\\.so$",
+        "jsc": "^(?:lib/[^/]+/libjsc\\.so|lib/[^/]+/libjscexecutor\\.so)$"
       }
     },
     {
@@ -38,10 +38,10 @@
       "name": "Apache Cordova",
       "weight": 80,
       "markers": [
-        "assets/www/index\\.html",
-        "assets/www/cordova\\.js",
-        "assets/www/cordova_plugins\\.js",
-        "lib/[^/]+/libcordova[^/]*\\.so"
+        "^assets/www/index\\.html$",
+        "^assets/www/cordova\\.js$",
+        "^assets/www/cordova_plugins\\.js$",
+        "^lib/[^/]+/libcordova[^/]*\\.so$"
       ]
     },
     {
@@ -49,8 +49,8 @@
       "name": "Capacitor",
       "weight": 80,
       "markers": [
-        "capacitor\\.config\\.(json|ts)",
-        "assets/public/"
+        "^(?:capacitor\\.config\\.(json|ts))$",
+        "^assets/public/"
       ]
     },
     {
@@ -58,8 +58,8 @@
       "name": "Ionic (web overlay)",
       "weight": 40,
       "markers": [
-        "assets/(www|public)/.*ionic[^/]*\\.(js|css)",
-        "assets/(www|public)/.*ngsw\\.json"
+        "^(?:assets/(www|public)/.*ionic[^/]*\\.(js|css))$",
+        "^(?:assets/(www|public)/.*ngsw\\.json)$"
       ]
     },
     {
@@ -67,7 +67,7 @@
       "name": "Kony (Temenos)",
       "weight": 90,
       "markers": [
-        "lib/[^/]+/libkony[^/]*\\.so"
+        "^lib/[^/]+/libkony[^/]*\\.so$"
       ]
     },
     {
@@ -75,8 +75,8 @@
       "name": ".NET MAUI",
       "weight": 110,
       "markers": [
-        "assemblies/(.*/)?Microsoft\\.Maui[^/]*\\.dll",
-        "lib/[^/]+/lib(Microsoft\\.)?Maui[^/]*\\.so"
+        "^assemblies/(.*/)?Microsoft\\.Maui[^/]*\\.dll$",
+        "^lib/[^/]+/lib(Microsoft\\.)?Maui[^/]*\\.so$"
       ]
     },
     {
@@ -84,11 +84,11 @@
       "name": "Xamarin / .NET",
       "weight": 100,
       "markers": [
-        "lib/[^/]+/libmonodroid\\.so",
-        "lib/[^/]+/libxamarin[^/]*\\.so",
-        "lib/[^/]+/libmono-android\\.[^/]*\\.so",
-        "assemblies/assemblies[^/]*\\.blob",
-        "assemblies/.*\\.dll"
+        "^lib/[^/]+/libmonodroid\\.so$",
+        "^lib/[^/]+/libxamarin[^/]*\\.so$",
+        "^lib/[^/]+/libmono-android\\.[^/]*\\.so$",
+        "^assemblies/assemblies[^/]*\\.blob$",
+        "^assemblies/.*\\.dll$"
       ]
     },
     {
@@ -96,9 +96,9 @@
       "name": "NativeScript",
       "weight": 90,
       "markers": [
-        "lib/[^/]+/libNativeScript\\.so",
-        "assets/metadata/treeNodeStream\\.dat",
-        "assets/app/vendor\\.js"
+        "^lib/[^/]+/libNativeScript\\.so$",
+        "^assets/metadata/treeNodeStream\\.dat$",
+        "^assets/app/vendor\\.js$"
       ]
     },
     {
@@ -106,9 +106,9 @@
       "name": "Qt for Android",
       "weight": 90,
       "markers": [
-        "lib/[^/]+/libQt[56][^/]*Core[^/]*\\.so",
-        "lib/[^/]+/libplugins_platforms_qtforandroid[^/]*\\.so",
-        "assets/android_rcc_bundle\\.rcc"
+        "^lib/[^/]+/libQt[56][^/]*Core[^/]*\\.so$",
+        "^lib/[^/]+/libplugins_platforms_qtforandroid[^/]*\\.so$",
+        "^assets/android_rcc_bundle\\.rcc$"
       ]
     },
     {
@@ -116,8 +116,8 @@
       "name": "Titanium (Appcelerator)",
       "weight": 85,
       "markers": [
-        "lib/[^/]+/libtitanium\\.so",
-        "assets/Resources/app\\.js"
+        "^lib/[^/]+/libtitanium\\.so$",
+        "^assets/Resources/app\\.js$"
       ]
     },
     {
@@ -125,23 +125,55 @@
       "name": "Unity",
       "weight": 100,
       "markers": [
-        "lib/[^/]+/libunity\\.so",
-        "assets/bin/Data/Managed/"
+        "^lib/[^/]+/libunity\\.so$",
+        "^assets/bin/Data/Managed/"
       ]
     }
   ],
   "embedded_js": [
-    { "id": "duktape", "name": "Duktape (embedded JS)", "marker": "lib/[^/]+/libduktape\\.so" },
-    { "id": "j2v8", "name": "J2V8 (embedded V8)", "marker": "lib/[^/]+/libj2v8\\.so" }
+    {
+      "id": "duktape",
+      "name": "Duktape (embedded JS)",
+      "marker": "^lib/[^/]+/libduktape\\.so$"
+    },
+    {
+      "id": "j2v8",
+      "name": "J2V8 (embedded V8)",
+      "marker": "^lib/[^/]+/libj2v8\\.so$"
+    }
   ],
   "notable_libs": [
-    { "regex": "lib/[^/]+/libtoolChecker\\.so", "label": "RootBeer (root checker)" },
-    { "regex": "lib/[^/]+/libtool-checker\\.so", "label": "RootBeer (root checker)" },
-    { "regex": "lib/[^/]+/libAppGuard\\.so", "label": "AppGuard (SecIron)" },
-    { "regex": "lib/[^/]+/libRiskStub\\.so", "label": "RiskStub (SecIron)" },
-    { "regex": "lib/[^/]+/libpairipcore\\.so", "label": "PairIP (Google Play license check)" },
-    { "regex": "lib/[^/]+/libeversafe[^/]*\\.so", "label": "Everspin EverSafe" },
-    { "regex": "lib/[^/]+/libdedge\\.so", "label": "DataVisor (device risk)" },
-    { "regex": "lib/[^/]+/libvosWrapperEx\\.so", "label": "Vkey V-OS" }
+    {
+      "regex": "^lib/[^/]+/libtoolChecker\\.so$",
+      "label": "RootBeer (root checker)"
+    },
+    {
+      "regex": "^lib/[^/]+/libtool-checker\\.so$",
+      "label": "RootBeer (root checker)"
+    },
+    {
+      "regex": "^lib/[^/]+/libAppGuard\\.so$",
+      "label": "AppGuard (SecIron)"
+    },
+    {
+      "regex": "^lib/[^/]+/libRiskStub\\.so$",
+      "label": "RiskStub (SecIron)"
+    },
+    {
+      "regex": "^lib/[^/]+/libpairipcore\\.so$",
+      "label": "PairIP (Google Play license check)"
+    },
+    {
+      "regex": "^lib/[^/]+/libeversafe[^/]*\\.so$",
+      "label": "Everspin EverSafe"
+    },
+    {
+      "regex": "^lib/[^/]+/libdedge\\.so$",
+      "label": "DataVisor (device risk)"
+    },
+    {
+      "regex": "^lib/[^/]+/libvosWrapperEx\\.so$",
+      "label": "Vkey V-OS"
+    }
   ]
 }
