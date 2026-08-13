@@ -5,6 +5,7 @@ nothing fails when one of them goes stale. These tests keep AGENTS.md canonical
 and make sure the pointer still points somewhere real.
 """
 
+import base64
 import json
 import pathlib
 import re
@@ -117,11 +118,20 @@ def test_readme_rules_sample_matches_the_real_kotlin_rule():
         )
 
 
+# Names of apps that were scanned and must not appear in this public tree,
+# held base64-encoded so that this guard is not itself the one place they are
+# written out. That is not secrecy — anyone can decode it — but a plaintext
+# list here would be the target list the rule exists to prevent, and it would
+# survive in git history the same way the originals did.
+_REDACTED_NEEDLES = ("ZGlnaWJhbms=", "YnVtaSBhcnRh", "bWxwdC5zaWVtbw==")
+
+
 def test_no_scanned_banking_app_is_named_in_the_tree():
     """This repository is public: a package name paired with a framework or
     packer is a target list tied to a named institution. Findings from such an
     app go in generically; the detail lives in the private repo."""
     here = pathlib.Path(__file__).resolve()
+    needles = [base64.b64decode(n).decode() for n in _REDACTED_NEEDLES]
     # .github is deliberately scanned; only caches, build output and any local
     # corpus are skipped.
     skip_dirs = {".git", ".ruff_cache", ".pytest_cache", ".mypy_cache", "__pycache__",
@@ -134,9 +144,9 @@ def test_no_scanned_banking_app_is_named_in_the_tree():
         if any(part in skip_dirs for part in path.relative_to(ROOT).parts[:-1]):
             continue
         if path.resolve() == here:
-            continue  # this file necessarily spells the names it searches for
+            continue  # this file carries the encoded needles
         text = path.read_text(encoding="utf-8", errors="replace").lower()
-        for needle in ("redacted-name-a", "redacted-name-b", "redacted-package"):
+        for needle in needles:
             if needle in text:
                 leaked.append(f"{path.name}: {needle}")
     assert not leaked, f"named banking apps in a public tree: {leaked}"
